@@ -1,0 +1,69 @@
+* MatVE
+Matlab Virtual Environment
+
+** Description
+MatVE is a tool that manages your matlab environment on a by-project basis.
+This means only including files, variables, and packages that are relevant to your projects.
+It works by managing your matlab path in a sophisticated way.
+
+MatVE is designed to be super user friendly, perhaps making working in Matlab even more user friendly.
+** Basic Usage
+Configuration is centered around project directories. During installation, a specify a root projects directory where my various projects are kept. Any directory the root projects directory is considered an independent project.
+
+After installation. 99% of usage requires only three commands.
+   + VE.switchPrj or VEs - switch to a different project. A prompt appears if no project is provided
+   + VE.config - configure project
+   + VE.reload or VEr - reload project after reconfiguring
+
+Running VE.config opens the current project configuration file, which looks something like this:
+#+begin_src
+l
+    MatBaseTools
+        site=github.com/portalgun/MatBaseTools
+        version=0.1
+    MyMatSql
+p
+    ImageAnalysis
+    MyToolbox
+
+#+end_src
+This configuration file is declaring four dependencies of types.
+- l - library dependency. These are dependencies are meant to be static.
+- p - project dependencies. These are other projects that are meant to be developed in parallel.
+In the 'MatBaseTools' example, a url and version are provided.  If I don't have this package already installed, MatVe will fetch it and set it up for me.
+
+Installation integrates MatVE with your startup, so you can automatically continue where you left off when you restarted matlab.
+
+
+** Other features
+MatVE provides a very large suite of features.  Everything below is disabled by default as to not overwhelm new users.
+
+Session management
++ By-project command history
++ Auto-saving/reloading workspaces
+
+Hierarchical configuration
++ By-project environment variable management
++ Hostname/Os specific configuration
+
+Auto project organization
++ Better defaults for when creating/saving  data, figures, binaries.
++ Support for logging
++ Function aliasing
+
+Advanced path configuration
++ Ordering
++ Java
++ include/exclude
+
+Project setup
++ Run custom code (hooks) for specific projects when switching or reloading
++ MAKE files
+
+External Editor support
++ Auto-generate GTAGS (GNU Global)
++ Emacs projectile support
+
+Features being developed
++ Project testing suite
++ Toolboxtoolbox package compatibility

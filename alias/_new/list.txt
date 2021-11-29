@@ -1,0 +1,12 @@
+cd
+getenv
+savas
+savefig
+open
+edit
+[S]=load
+[fig]=openfig
+HOME
+userpath?
+cd?
+configure
