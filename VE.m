@@ -116,8 +116,18 @@ methods(Static)
     end
     function config(thing)
         % Usage;
-        %   config (ve|root|etc|usr|prj|hook)
+        %   config (ve|root|etc|prj|hook)
         %   Open configuration for  editing
+        %   Args:
+        %       mve/ve              User configuration for MVE itself
+        %                              these are configurations that *are* specific to you as the end user of MVE.
+        %       root                User configuration that are persistent across all projects
+        %                              these are configurations that *are* specific to you as the end user.
+        %       user/usr [name]     User configuration for invidiual package (current if name is ommitted)
+        %                              these are configurations that *are* specific to you as the end user.
+        %       source/src [name]   source configuration for invidiual package (current if name is ommitted)
+        %                              these are configurations that are *not* specific to any end user.
+        %       hook [name]         Hook configuration for individual project (current if name is ommitted)
 
         if nargin < 1; thing=''; end
         bGd=VE.cmd_helper(thing,'CONFIG');
@@ -680,7 +690,7 @@ methods(Static, Access=private)
         end
     end
     function out=persist(ve)
-        global VE__
+        global VE__;
         if nargin > 0
             VE__=ve;
         else
@@ -721,16 +731,16 @@ methods(Static, Access=private)
 
         opts=VE.ls_self();
         switch type
-            case 've'
+            case {'ve','mve','VE','MVE'}
                 fname=[Env.var('PX_ETC') 've.cfg'];
                 ed=opts{'configEditor'};
             case 'root'
                 fname=[Env.var('PX_ETC') 'root.cfg'];
                 ed=opts{'configEditor'};
-            case 'pkg'
+            case {'src','source'}
                 fname=[Env.var('PX_PRJS_ROOT') prj filesep 'pkg.cfg'];
                 ed=opts{'configEditor'};
-            case 'etc'
+            case 'usr'
                 fname=[Env.var('PX_ETC') prj '.cfg'];
                 ed=opts{'configEditor'};
             case 'hook'

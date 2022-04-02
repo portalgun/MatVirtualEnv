@@ -12,6 +12,7 @@ function mve(cmd,varargin)
 %   mve help [cmd]     - get help for a command
 %   mve cd             - change to a project via prompt
 %   mve cd [prj]       - change project to project given name
+%   mve ls [arg]       - list details about a project, depndencies, env. variables, or MVE
 %   mve pwd            - list current project
 %   mve reload         - reload current project
 %   mve config [type]  - configure projects and MVE

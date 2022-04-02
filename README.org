@@ -1,21 +1,76 @@
 * MatVE
-Matlab Virtual Environment
+Matlab Virtual Environment:
+Path/Project/Package/Session/History manager
 
 ** Description
 MatVE is a tool that manages your matlab environment on a by-project basis.
 This means only including files, variables, and packages that are relevant to your projects.
-It works by managing your matlab path in a sophisticated way.
 
-MatVE is designed to be super user friendly, perhaps making working in Matlab even more user friendly.
+MatVE is designed to be useable within minutes; 90% of its use is centered around only a few easy to remember commands.
+But it is also designed to be feature rich and very customizable if you so choose.
+
 ** Basic Usage
 Configuration is centered around project directories. During installation, a specify a root projects directory where my various projects are kept. Any directory the root projects directory is considered an independent project.
 
-After installation. 99% of usage requires only three commands.
-   + VE.switchPrj or VEs - switch to a different project. A prompt appears if no project is provided
-   + VE.config - configure project
-   + VE.reload or VEr - reload project after reconfiguring
+Post installation, use is straightforward.
+#+begin_src matlab
+    > mve [command] [arguments]
+#+end_src
 
-Running VE.config opens the current project configuration file, which looks something like this:
+Switching projects:
+#+begin_src
+> mve cd [project name]
+#+end_src
+Leave out the project name, and MVE will spit out a list of available projects to choose from.
+This follows a consistent principle with MVE -- if you don't remember a command or argument, just ommit it and mve will describe your options
+#+begin_src matlab
+> mve
+> mve config
+#_end_src
+
+** List of commands
+List of commands:
+#+begin_src matlab
+  mve cd             % change to a project via prompt
+  mve cd [prj]       % change project to project given name
+  mve pwd            % list current project
+  mve ls [arg]       % list details about a project, depndencies, env. variables, or MVE
+  mve reload         % reload current project (including new directories, environment variables)
+  mve config [type]  % configure projects and MVE
+  mve new [prj]      % create and switch to new project
+  mve help           % see full list of commands
+  mve help [cmd]     % get help for a command
+#+end_src
+
+
+** Installtation
+Installation integrates MVE with your startup, so you can automatically continue where you left off when you restarted matlab.
+
+** Configuration
+Open configuration for editing
+#+begin_src
+> mve config [arg]
+#+end_src
+#+begin_src
+  source/src [name] % source configuration for invidiual package (current if name is ommitted)
+                    %    these are configurations that are *not* specific to any end user.
+  user/usr [name]   % User configuration for invidiual package (current if name is ommitted)
+                    %    these are configurations that *are* specific to you as the end user.
+  root              % User configuration that are persistent across all projects
+                    %    these are configurations that *are* specific to you as the end user.
+  mve/ve            % User configuration for MVE itself
+                    %    these are configurations that *are* specific to you as the end user of MVE.
+  hook [name]       % Hook configuration for individual project (current if name is ommitted)
+#+end_src
+
+*** src/source configuration
+The "source" configuration is meant to follow your project/package if you decide to publish your project online.
+The source configuration is a plain-text file that resides within the projects root directory as 'pkg.cfg' ([MVEROOT]/prj/[package]/pkg.cfg or [MVEROOT]/lib/[package]/pkg.cfg).
+The purpose of this configuration is to:
+1. list of dependencies (two main types)
+2. *declare* required environment variables and optionally their defaults.
+
+Here is an example source configuration
 #+begin_src
 l
     MatBaseTools
@@ -26,14 +81,61 @@ p
     ImageAnalysis
     MyToolbox
 
+env
+    schema_fname=mysql/imap.schema
+    gen
+    bin
+    smp
+
 #+end_src
-This configuration file is declaring four dependencies of types.
-- l - library dependency. These are dependencies are meant to be static.
-- p - project dependencies. These are other projects that are meant to be developed in parallel.
-In the 'MatBaseTools' example, a url and version are provided.  If I don't have this package already installed, MatVe will fetch it and set it up for me.
+Anything that is nested under l or p is treated as a dependency.
+There are two main configuration types
+1. l - library dependency. These are dependencies are meant to be static.
+2. p - private/parallel/sub-project dependencies. These are other projects that are meant to be developed in parallel.
 
-Installation integrates MatVE with your startup, so you can automatically continue where you left off when you restarted matlab.
+Depnecencies are loaded according to the order in which they are listed.
 
+**** (l)ibrary dependencies
+If you are using somebody elses' work, that you arn't going to change yourself (other than configurat), you would list it as a library dependency.
+In the 'MatBaseTools' example, a url and version are provided.  If I don't have this package already installed, MVE will fetch it and set it up for me.
+Anything that is nested under l or p is treated as a dependency.
+
+If you don't have any l-type dependencies, ommit it entirely.
+
+**** (p)arallel dependencies
+If you are using somebody elses' work, that you arn't going to change yourself (other than configurat), you would list it as a library dependency.
+In the 'MatBaseTools' example above, a url and version are provided.  If I don't have this package already installed, MVE will fetch it and set it up for me.
+
+If you don't have any p-type dependencies, ommit the seciton entirely.
+
+**** (env)ironment variables
+Environment variables are like global variables specific to an individual project, specific to the environment of the end user.
+For example if I had a project that needed to know where your data was stored, an environment variable would be good for this condition.
+Declaring an environment variable is essentially listing what variables are required for the end-user to provide.
+
+Environment variables are specific to individual dependencies.
+If two projects use the same names for required environment variables, there will be no conflict. MVE sorts this all out under the hood.
+
+If you don't have any environmnet dependencies, ommit the section entirely.
+
+Environment variables can be assigned in any of the thre levels of confguration (src, usr, root).
+Their priority is as follows:
+1. usr
+2. root
+3. src
+When MVE looks for the value of an environment variable, it starts at usr and falls back to root, then src default (if it exists).
+You will be warned as an end user in the final condition, and error if it can't find an a definition at all.
+
+*** usr/user configuration
+The user configuration is a plaintext file that resides outside of the  project directory ([MVEROOT]/etc/[project].cfg
+User configuration configures a package project for your own use. It where a user *assigns* environment variables in accordance with your machine/needs as an end user (see src above). If you an environment variable needs to be assigned as an end user, you will be notified when switching to a project that contains the dependency.
+
+*** root configuration
+Root configuration is a plaintext file that resides outside of the project directory ([MVEROOT]/etc/root.cfg
+This is the same as user configuration, but across all projects.
+
+*** MVE configuration
+MVE configuration is a plaintext file that resides outside of the project directory ([MVEROOT]/etc/ve.cfg
 
 ** Other features
 MatVE provides a very large suite of features.  Everything below is disabled by default as to not overwhelm new users.
