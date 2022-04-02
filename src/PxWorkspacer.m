@@ -1,10 +1,10 @@
-classdef PxWorkSpacer < handle
+classdef PxWorkspacer < handle
 properties(Access=private)
     PX
 end
 methods
-    function PxWorkSpacer(PX)
-        obj.PX=px;
+    function obj=PxWorkspacer(PX)
+        obj.PX=PX;
     end
     function prompt_load(obj,prj)
         file=obj.PX.ve.lastSavedWrk;
@@ -13,7 +13,7 @@ methods
         end
 
         out=Input.yn(['Restore saved workspace (' prj ')?']);
-        rmLastHistory;
+        Mat.rmLastHistory;
         if out
             evalin('base','clear');
             Px.loadLast();
@@ -24,7 +24,6 @@ methods
         if isempty(prj)
             return
         end
-        bHist=obj.rootOpts.bHistory;
 
         vars=evalin('base','who');
         vars(ismember(vars,'ans'))=[];
@@ -32,22 +31,19 @@ methods
             return
         end
 
+        cur=VE.pwd;
         out=Input.yn(['Save workspace (' cur ')?']);
         Mat.rmLastHistory;
 
         if out
-            fil=ve.lastSavedWrk;
+            fil=obj.PX.ve.lastSavedWrk;
             Fil.touch(fil);
             obj.save_workspace();
         end
-        if bHist
-            Mat.saveHistory();
-        end
-
     end
     function []=save_workspace(obj)
-        wsName='Wrk_' VE.getName() '_' Date.timeFilStr();
-        fil=[getenv('PX_VAR')  ];
+        wsName=['Wrk_' VE.pwd() '_' Date.timeFilStr()];
+        fil=[obj.PX.dirs.root.var VE.pwd filesep wsName];
         evalin('base',['save(''' fil ''');']);
         if ~isempty(getenv('Px_BHIST'))
             Mat.saveHistory();
@@ -101,4 +97,5 @@ methods
             delete(fil);
         end
     end
+end
 end

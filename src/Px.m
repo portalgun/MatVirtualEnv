@@ -67,6 +67,7 @@ properties
     pathFile
     defPathFile
     bInitedFile
+    bTemp=false
 
     rootCfgFile
     rootOpts
@@ -74,6 +75,8 @@ properties
     hiddenOpts
 
     % PRJ CONFIG
+    Hist
+    Wrk
     Opts
     Cfg
     Cmp
@@ -86,7 +89,7 @@ end
 properties(Constant)
     div=char(59)
     sep=char(61)
-    MODES={'run_hook','rename','switch','prompt','reset','startup','all','list','compile_prj','compile_files'}
+    MODES={'get','run_hook','rename','switch','prompt','reset','startup','all','list','compile_prj','compile_files'}
     ROOTFLDS={'test','prvt','wrk','bin','prj','ext','tmp','var','lib','etc','data','media', 'log'}
     ROOTDIRS={'test','prvt','wrk','bin','prj','ext','tmp','var','lib','etc','data','media',['var' filesep 'log']}
     ROOTWRITE={'wrk','bin','media','tmp','var','log'}
@@ -112,10 +115,12 @@ methods(Access = ?VE)
         end
 
         switch obj.ve.mode
-        case 'list'
+        case {'list','get'}
             return
         case 'startup'
-            display(['Project ' obj.prj ' loaded.']);
+            if ~obj.bTemp
+                display(['Project ' obj.prj ' loaded.']);
+            end
         case 'reset'
             display(['Done reloading project ' obj.prj '.']);
         case 'switch'
@@ -137,6 +142,8 @@ methods(Access = ?VE)
                 obj.mode_prompt();
             case 'switch'
                 obj.mode_switch();
+            case 'get'
+                obj.mode_get();
             case 'reset'
                 obj.mode_reset();
             case 'startup'
@@ -172,8 +179,20 @@ methods(Access = ?VE)
         end
         obj.setup_prj(obj.prj);
     end
+    function mode_get(obj)
+        obj.bTemp=true;
+        curPrj=obj.prj;
+        obj.prj=obj.argOpts{'prj'};
+        if ~ismember(obj.prj,obj.PRJS);
+            error(['Invalid project: ' prj ]);
+        end
+
+        if strcmp(obj.ve.exitflag{1},'exit')
+            return
+        end
+        obj.setup_prj();
+    end
     function mode_switch(obj)
-        bWs=obj.rootOpts{'bWorkspace'};
         curPrj=obj.prj;
         obj.prj=obj.argOpts{'prj'};
         if isempty(obj.prj)
@@ -185,9 +204,9 @@ methods(Access = ?VE)
         if strcmp(obj.ve.exitflag{1},'exit')
             return
         end
-        if bWs
-            obj.PxWorkspacer.prompt_save(curPrj);
-            obj.PxWorkspacer.prompt_load(obj.prj);
+        if obj.rootOpts{'bWorkspace'};
+            obj.Wrk.prompt_save(curPrj);
+            obj.Wrk.prompt_load(obj.prj);
         end
         obj.setup_prj();
     end
@@ -280,6 +299,7 @@ methods(Access = ?VE)
     end
 %% ROOT
     function setup_root(obj)
+
         obj.get_sys_info;
 
         P=Px.get_root_configs_parse();
@@ -291,6 +311,7 @@ methods(Access = ?VE)
         P=Px.get_px_parse;
         [obj.argOpts,UM]=Args.parseLoose(dict(),P,obj.ve.args);
 
+
         % DIRS
         obj.get_root_dirs();
 
@@ -298,9 +319,14 @@ methods(Access = ?VE)
         obj.rootEnvFile=[obj.ve.intDir 'env']; % FOR CLEARING ENV ON SWITCH
         obj.curPrjFile=[obj.ve.intDir 'current_project'];
 
+        obj.Hist=PxHistorian(obj,obj.rootOpts{'bHistory'});
+
         obj.get_prjs();
         if isempty(obj.prj)
             obj.get_current_prj;
+        end
+        if obj.rootOpts{'bWorkspace'};
+            obj.Wrk=PxWorkspacer(obj);
         end
     end
     function get_sys_info(obj)
@@ -317,7 +343,7 @@ methods(Access = ?VE)
         if ~isempty(obj.rootCfgFile)
             return
         end
-        name='Px.config';
+        name='ve.cfg';
 
         list={[obj.ve.rootDir 'etc' filesep], obj.sys.home, obj.ve.selfPath};
         for i = 1:length(list)
@@ -372,10 +398,16 @@ methods(Access = ?VE)
         if ~obj.bSkipDirs()
             obj.make_prj_dirs();
             obj.make_wrk_dir();
-            Fil.touch(obj.bInitedFile);
+            if ~obj.bTemp
+                Fil.touch(obj.bInitedFile);
+            end
         end
 
         obj.get_all_opts();
+        if obj.bTemp
+            return
+        end
+
         obj.setup_extra();
 
         obj.set_env();
@@ -385,10 +417,13 @@ methods(Access = ?VE)
 
         if strcmp(obj.ve.mode,'reset')
             bClc=obj.rootOpts{'bClcOnReload'};
+            bClear=false;
         elseif strcmp(obj.ve.mode,'switch')
             bClc=obj.rootOpts{'bClcOnSwitch'};
+            bClear=obj.rootOpts{'bClcOnSwitch'};
         else
             bClc=false;
+            bClear=false;
         end
 
         obj.setup_path();
@@ -396,8 +431,11 @@ methods(Access = ?VE)
         if bClc
             clc;
         end
+        if bClear
+            evalin('base','clear');
+        end
         obj.run_post_hooks();
-        builtin('cd',obj.dirs.prj.prj);
+        builtin('cd',obj.dirs.prj.wrk);
         savepath;
         savepath(obj.pathFile);
     end
@@ -417,7 +455,7 @@ methods(Access = ?VE)
     end
     function setup_extra(obj)
         if obj.rootOpts{'bHistory'}
-            obj.make_history(); % XXX
+            obj.Hist.prjLink();
         end
         if obj.rootOpts{'bGtags'}
             obj.gen_gtags();
@@ -532,12 +570,12 @@ methods(Access = ?VE)
         for i = 1:length(flds)
             fld=flds{i};
             obj.dirs.prj.(fld)=[obj.dirs.root.(fld) obj.prj filesep];
-            if ~Dir.exist(obj.dirs.prj.(fld))
+            if ~obj.bTemp && ~Dir.exist(obj.dirs.prj.(fld))
                 mkdir(obj.dirs.prj.(fld));
             end
         end
         obj.dirs.root.varlib=[obj.dirs.prj.var 'lib' filesep];
-        if ~Dir.exist([obj.dirs.prj.var 'lib' filesep])
+        if ~obj.bTemp && ~Dir.exist([obj.dirs.prj.var 'lib' filesep])
             mkdir(obj.dirs.root.varlib);
         end
     end
@@ -548,6 +586,9 @@ methods(Access = ?VE)
         for i =1:length(flds)
             fld=flds{i};
             obj.dirs.lnk.(fld)= [obj.dirs.lnk.wrk fld filesep];
+        end
+        if obj.bTemp
+            return
         end
 
         % TO CREATE
@@ -587,9 +628,9 @@ methods(Access = ?VE)
             FilDir.easyln(noteFil, [obj.dirs.lnk.wrk 'notes.org']);
         end
 
-        pxFil=[obj.dirs.prj.prj '.px'];
+        pxFil=[obj.dirs.prj.prj 'pkg.cfg'];
         if Fil.exist(pxFil)
-            FilDir.easyln(pxFil, [obj.dirs.lnk.wrk '.px']);
+            FilDir.easyln(pxFil, [obj.dirs.lnk.wrk 'pkg.cfg']);
         end
 
     end
@@ -635,8 +676,6 @@ methods(Access = ?VE)
         extra=wrkDir(~ismember(wrkDir,lnk));
         if isempty(extra)
             extra=[];
-        else
-            extra=strcat(obj.ve.rootDir,extra,filesep);
         end
 
         % LIB
@@ -657,9 +696,13 @@ methods(Access = ?VE)
 
 
         % BIN
-        bin=strcat(obj.dirs.root.bin,obj.prjs,filesep);
-        bin=bin(cellfun(@Dir.exist,bin));
-        if isempty(bin)
+        if ~isempty(obj.prjs)
+            bin=strcat(obj.dirs.root.bin,obj.prjs,filesep);
+            bin=bin(cellfun(@Dir.exist,bin));
+            if isempty(bin)
+                bin=[];
+            end
+        else
             bin=[];
         end
 
@@ -769,6 +812,17 @@ methods(Access = ?VE)
         flds=fieldnames(obj.Opts.Env);
         for i = 1:numel(flds)
             fld=flds{i};
+
+            if contains(obj.Opts.Env.(fld),'$$')
+                mtchs=regexp(obj.Opts.Env.(fld),'\$\$[A-Z_]*','match');
+                for j = 1:length(mtchs)
+                    ind=ismember(flds,mtchs{j}(3:end));
+                    if any(ind)
+                        obj.Opts.Env.(fld)=strrep(obj.Opts.Env.(fld), mtchs{j}, obj.Opts.Env.(flds{ind}));
+                    end
+                end
+            end
+
             try
                 setenv(fld,obj.Opts.Env.(fld));
             catch ME
@@ -862,34 +916,45 @@ methods(Static, Access=?PxPrjOptions)
     end
     function P=get_root_configs_parse()
         P={ ...
-           'bHistory', false, 'Num.isBinary'; ...
-           'bAutoSaveHistory',false,'Num.isBinary'; ...
-           'bWorkspace', false, 'Num.isBinary';...
-           'bAutoSaveWorkspace',false,'Num.isBinary'; ...
-           'bCompilePromt',false,'Num.isBinary'; ...
-           'bAutoCompile',false, 'Num.isBinary'; ...
-           'bForceCompile', false, 'Num.isBinary';...
-           'bDiary',false,'Num.isBinary';...
-           'bRootDiary',false,'Num.isBinary';...
-           'bLockLib',false,'Num.isBinary';
+           'bHistory', false, 'isBinary'; ...
+           'bAutoSaveHistory',false,'isBinary'; ...
+           'bWorkspace', true, 'isBinary';...
+           'bAutoSaveWorkspace',true,'isBinary'; ...
+           'bCompilePromt',false,'isBinary'; ...
+           'bAutoCompile',false, 'isBinary'; ...
+           'bForceCompile', false, 'isBinary';...
+           'bDiary',false,'isBinary';...
+           'bRootDiary',false,'isBinary';...
+           'bLockLib',false,'isBinary';
            'externalEditor', '','ischar';
            'pager','','ischar';...
-           'bMedia',true, 'Num.isBinary';... % DONE
-           'bData',true, 'Num.isBinary';...  % DONE
-           'bGtags',false, 'Num.isBinary'; ...       % DONE
-           'bProjectile', false, 'Num.isBinary'; ... % DONE
-           'bGitIgnore',false, 'Num.isBinary';...
-           'bHookPrint',true,'Num.isBinary';... % DONE
+           'bMedia',true, 'isBinary';... % DONE
+           'bData',true, 'isBinary';...  % DONE
+           'bGtags',false, 'isBinary'; ...       % DONE
+           'bProjectile', false, 'isBinary'; ... % DONE
+           'bGitIgnore',false, 'isBinary';...
+           'bHookPrint',true,'isBinary';... % DONE
            'ignoreDirs',Px.DEFAULTIGNORE,'iscell'; ... % DONE
-           'bClcOnReload', true, 'Num.isBinary';  ... %% DONE
-           'bClcOnSwitch', true, 'Num.isBinary';  ... %% DONE
+           'bClcOnReload', true, 'isBinary';  ... %% DONE
+           'bSession',true, 'isBinary';
+           'bClcOnSwitch', true, 'isBinary';  ... %% DONE
+           'bClearOnSwitch',true,'isBinary';  ... %% DONE
            'writeDir','','ischar';                     % TEST
-           'AutoSwitchOnCd', true, 'Num.isBinary'; ... % XXX?
-           'bSavePrjEnv',false,'Num.isBinary'; % XXX?
-           'bAutoPathGenOnStartup',true,'Num.isBinary';  % TEST
-           'bAutoPathGenOnSwith',true,'Num.isBinary';    % TEST
-           'bAutoDefaultPath',true,'Num.isBinary';  %  allow path caching of default
-           'bMakeDirsOnSwitch',false,'Num.isBinary';       % TEST
+           'AutoSwitchOnCd', true, 'isBinary'; ... % XXX?
+           'bSavePrjEnv',false,'isBinary'; % XXX?
+           'bAutoPathGenOnStartup',true,'isBinary';  % TEST
+           'bAutoPathGenOnSwith',true,'isBinary';    % TEST
+           'bAutoDefaultPath',true,'isBinary';  %  allow path caching of default
+           'bMakeDirsOnSwitch',false,'isBinary';       % TEST
+
+           'readmeExt','.txt','ischar';
+           'todoExt','.txt','ischar';
+           'notesExt','.txt','ischar';
+
+           'configEditor','matlab','ischar';
+           'readmeEditor','matlab','ischar';
+           'todoEditor','matlab','ischar';
+           'notesEditor','matlab','ischar';
           };
     end
 end

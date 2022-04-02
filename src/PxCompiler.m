@@ -46,7 +46,7 @@ methods
         end
     end
     function OPTS=parse_prj_Opts(obj,OPTS)
-        Opts=copy(OPTS.mex);
+        copy=Opts(OPTS.mex);
         flds=fieldnames(Opts);
 
 

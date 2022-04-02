@@ -41,14 +41,14 @@ methods(Static)
         end
     end
     function obj=touch(fname)
-        if Fil.is(fname)
+        if exist(fname,'file') && ~exist(fname,'dir')
             fclose(fopen(fname,'a'));
         else
             fclose(fopen(fname,'w'));
         end
     end
     function status=git_clone(site,direName)
-        out=BaseInstaller.git_local_state(direName);
+        out=PxUtil.git_local_state(direName);
         if out==1
             'out equals 1'
             % TODO
@@ -66,6 +66,8 @@ methods(Static)
         if out==0 && isunix
             cmd=['git clone -q ' site ' ' direName ];
             [status,msg]=unix(cmd);
+            cmd
+            msg
         elseif out==0
             cmd=['git clone ' site ' ' direName ];
             [status,msg]=system(cmd);
@@ -83,16 +85,16 @@ methods(Static)
         end
         cd(oldDir);
     end
-    function [out]=git_local_state(direName)
+    function [out]=git_local_state(dirName)
         % 0 dire doesn't exist
         % 1 empty
         % 2 not empty with files, no .git
         % 3 has git
-        if ~exist(direName,'dir')
+        if ~exist(dirName,'dir')
             out=0;
-        elseif ~exist([direName '.git'],'dir') && length(dir(dirName)) == 2
+        elseif ~exist([dirName '.git'],'dir') && length(dir(dirName)) == 2
             out=1;
-        elseif ~exist([direName '.git'],'dir') && length(dir(dirName)) > 2
+        elseif ~exist([dirName '.git'],'dir') && length(dir(dirName)) > 2
             out=2;
         else
             out=3;

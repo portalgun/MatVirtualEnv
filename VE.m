@@ -1,8 +1,19 @@
 classdef VE < handle
+% VE
+%   MatVirtualEnv Suite developer API
+%   (If using VE from command prompt, use 've' instead [>> help ve]).
+%
+% Usage:
+%   VE.(command)(argument)
+%
+% Main commands:
+%   VE.help([cmd])    - see full list of commands
+%   VE.cd([prj])      - change project
+%   VE.pwd            - list current project
+%   VE.reload         - reload current project
+%   VE.config([type]) - configure projects and ve
+%
 methods(Static,Hidden)
-    function help()
-        % TODO
-    end
 %% INSTALL
     function startup()
         VE('startup');
@@ -23,35 +34,305 @@ methods(Static,Hidden)
         obj=VE('run',varargin{:});
         [varargout{1:nargout}]=obj.OUT{:};
     end
+    function init_all_projects()
+        % TEST
+        VE('all');
+    end
 end
 methods(Static)
-%% PROJECTS
-    function root_config()
-        VE.edit_([],'root');
+%% BASIC
+    function out=help(thing)
+        % Usage:
+        %   help [CMD [ARGS]]
+        %   List this information
+        if nargin < 1; thing=''; end
+        [bGd,STR]=VE.cmd_helper(thing,'CMDS');
+        if bGd
+            obj=VE(['ls_' thing]);
+        end
+        if nargout > 0
+            out=STR;
+        else
+            disp(STR);
+        end
     end
-    function env()
-        VE.edit_([],'env');
+    function cd(prj)
+        % Usage:
+        %   prj [prjname]
+        %   Switch project
+        if nargin < 1;
+            prj=[];
+        elseif ~ismember(prj,VE.ls_prjs)
+            disp(['Invalid prj name: ' prj '.' ])
+            return
+        end
+
+        VE('switch','prj',prj);
     end
-    function config()
-        VE.edit_([],'etc');
+    function OUT=dirname()
+        % Usage:
+        %   [dir] = dirname
+        %   Print project directory
+        out=getenv('PX_CUR_PRJ_DIR');
+        if nargout > 0
+            OUT=out;
+        else
+            disp(out);
+        end
     end
-    function deps()
-        VE.edit_([],'prj');
+    function OUT=pwd()
+        % Usage:
+        %   [prj] = pwd
+        %   Print current project
+        out=getenv('PX_CUR_PRJ_NAME');
+        if nargout > 0
+            OUT=out;
+        else
+            disp(out);
+        end
+    end
+    function reload()
+        % Usage;
+        %   reload
+        %   Reload all configurations
+
+        VE('reset');
+    end
+    function out=ls(thing,varargin)
+        % Usage;
+        %   [out] = ls (deps|env|prj|prjs|ve)
+        %   List status/configurations
+        if nargin < 1; thing=''; end
+        bGd=VE.cmd_helper(thing,'LS');
+        if bGd
+            if numel(varargin) == 0
+                eval(['VE.ls_' thing ';']);
+            else
+                args=strjoin(varargin,''',''');
+                cmd=['VE.ls_' thing '(''' args ''');'];
+                eval(cmd);
+            end
+        end
+    end
+    function config(thing)
+        % Usage;
+        %   config (ve|root|etc|usr|prj|hook)
+        %   Open configuration for  editing
+
+        if nargin < 1; thing=''; end
+        bGd=VE.cmd_helper(thing,'CONFIG');
+        if bGd
+            eval(['VE.config_' thing ';']);
+        end
+    end
+    function ws(cmd)
+        % Usage:
+        %   ws (save|load|rm)
+        %   Mangage workspaces
+
+        if nargin < 1; cmd=''; end
+        bGd=VE.cmd_helper(cmd,'WS');
+        if bGd
+            eval(['VE.ws_' cmd ';']);
+        end
+    end
+    function new(prj)
+        % Usage:
+        %   new [prj]
+        %   Create and switch to new project
+
+        if nargin < 1
+            disp('Must specify prj name')
+            return
+        end
+        dire=[getenv('PX_PRJS_ROOT') prj filesep];
+        if Dir.exist(dire)
+            Fil.touch([dire 'pkg.cfg']);
+            disp(['Project ' prj ' already exists']);
+            return
+        end
+        mkdir(dire);
+        Fil.touch([dire 'pkg.cfg']);
+        VE.cd(prj);
+
+    end
+    function rm(prj)
+        % Usage:
+        %   rm [prj]
+        %   Remove current or existing project
+
+        % TODO
+
+        if nargin < 1; prj=[]; end
+        obj=VE('rm','prj',prj);
+    end
+    function rename(prj,newName)
+        % Usage:
+        %   rename [prj]
+        %   Rename current or existing project
+
+        % TODO
+
+        if nargin < 1; prj=[]; end
+        obj=VE('rename','prj',prj,newName);
     end
     function todo()
+        % Usage;
+        %   todo
+        %   Open project todo for editing
+
         VE.edit_([],'todo');
     end
     function notes()
+        % Usage;
+        %   notes
+        %   Open project notes for editing
+
         VE.edit_([],'notes');
     end
-    function list()
+    function hook()
+        % Usage;
+        %   hook
+        %   Run project startup hook
+
+        % TODO
+        obj=VE('run_hook');
+    end
+    function prj=compile(file)
+        % Usage;
+        %   compile [makefile|sourcefile]
+        %   Compile specific file or all uncompiled project files
+        %
+        % XXX TODO
+    end
+end
+methods(Static,Hidden)
+    function config_self()
+        % -
+        %   Configure VE
+
+        VE.edit_([],'ve');
+    end
+    function config_pkg()
+        % -
+        %   Configure project as developer. These are overridden by all other options.
+        VE.edit_([],'pkg');
+    end
+    function config_root()
+        % -
+        %   Configure root. These options affect all projects, but overriden by etc
+        VE.edit_([],'root');
+    end
+    function config_etc()
+        % -
+        %   Configure project as end user. This is the highest level of configuration.
+        VE.edit_([],'etc');
+    end
+    function config_hook()
+        % -
+        %   Configure project hook. This is a startup file for individual projects.
+        VE.edit_([],'hook');
+    end
+%% BASIC
+%% LS
+    function out=ls_env()
+        % -
+        %  List loaded environment variables
+        if nargout < 1
+            VE('ls_env');
+        else
+            obj=VE('get_env');
+            out=obj.OUT;
+        end
+    end
+    function OUT=ls_prjs()
+        % -
+        %  List all projects
         dire=builtin('getenv','PX_PRJS_ROOT');
         out=VE.get_projects(dire)';
-        disp(strjoin(out,newline));
+        if nargout > 0
+            OUT=out;
+        else
+            disp( Str.tabify(strjoin(out,newline)) );
+        end
     end
-    function initAllProjects()
-        % TEST
-        VE('all');
+    function out=ls_deps(prj)
+        % -
+        %  List project dependency information
+        if nargin < 1; prj=[]; end
+        VE('ls_deps','prj',prj);
+    end
+    function out=ls_hooks(prj)
+        % -
+        %  List hooks that will run when reloading project
+
+        if nargin < 1
+            prj=VE.pwd();
+        end
+
+        % TODO
+        obj=VE('ls_hooks','prj',prj);
+        if nargout > 0
+            out=obj.OUT;
+        else
+            disp(Str.tabify(strjoin(obj.OUT,newline)));
+        end
+    end
+    function out=ls_rev(prj)
+        if nargin < 1
+            prj=VE.pwd();
+        end
+        [files,prjs]=VE.get_all_pkg_files();
+        files(ismember(prjs,prj))=[];
+        prjs(ismember(prjs,prj))=[];
+        lines=cellfun(@Fil.cell,files,'UniformOutput',false);
+        bRm=cellfun(@(x) isempty(x) || ~any(ismember(x,{'p','l','e'})) || ~any(contains(x,prj)) ,lines);
+        prjs(bRm)=[];
+        files(bRm)=[];
+
+        % TODO CHECK FILES TO BE SRUE
+        if nargout > 0
+            out=prjs;
+        else
+            if isempty(prjs)
+                prjs='  --none--';
+            end
+            disp(Str.tabify(strjoin(prjs,newline)));
+        end
+    end
+%% GET
+    function out=ls_prj(varargin)
+        % -
+        %  List specific dependency configuration options
+        obj=VE('get_options');
+        disp('  Project')
+        disp(obj.OUT.I(1));
+        disp('  Combined')
+        disp(obj.OUT.C);
+    end
+    function out=ls_dep(varargin)
+        % -
+        %  List specific dependency configuration options
+        if nargin < 1
+            VE.ls_deps();
+            return
+        end
+        obj=VE('get_options',varargin{:});
+        if nargout > 0
+            out=obj.OUT;
+        else
+            disp(obj.OUT);
+        end
+    end
+    function out = ls_self(varargin)
+        % -
+        %  List VE configuration options
+        obj=VE('get_root_options',varargin{:});
+        if nargout > 0
+            out=obj.OUT;
+        else
+            disp(obj.OUT);
+        end
     end
     function [out,prj]=isInPrj(dire)
         dire=FilDir.resolve(dire); %% XXX NEEDS TO RUN AS
@@ -65,76 +346,38 @@ methods(Static)
             prj=[];
         end
     end
-    function out=isProject(prj)
+    function out=isPrj(prj)
         dire=builtin('getenv','PX_PRJS_ROOT');
         PRJS=VE.get_projects(dire);
         out=ismember(prj,PRJS);
     end
 %% PRJ
-    function switchPrj(prj)
-        if nargin < 1; prj=[]; end
-        VE('switch','prj',prj);
-    end
-    function out=getRootOptions(varargin)
-        obj=VE('get_root_options',varargin{:});
-        out=obj.OUT;
-    end
-    function out=getOptions(varargin)
-        obj=VE('get_options',varargin{:});
-        out=obj.OUT;
-    end
-    function out=lsDeps(prj)
-        if nargin < 1; prj=[]; end
-        VE('ls_deps','prj',prj);
-    end
-    function rename(prj)
-        % TODO
-        if nargin < 1; prj=[]; end
-        obj=VE('rename','prj',prj);
-    end
 %% CURRENT PRJ
-    function reload()
-        VE('reset');
-    end
-    function runHook()
-        % TODO
-        obj=VE('run_hook');
-    end
-    function prj=compile()
-        % XXX TODO
-    end
-    function out=name()
-        out=getenv('PX_CUR_PRJ_NAME');
-    end
-    function out=getName()
-        out=getenv('PX_CUR_PRJ_NAME');
-    end
-    function out=getDir()
-        out=getenv('PX_CUR_PRJ_DIR');
-    end
 %% ENV
     function out=getEnv()
-        obj=VE('get_env');
-        out=obj.OUT;
     end
-    function out=lsEnv()
-        obj=VE('ls_env');
-    end
+
 %% WORKSPACES
-    function obj=saveWS()
+    function ws_save()
+        % -
+        % save workspace
         VE.save_workspace();
     end
-    function obj=loadWS()
+    function ws_load()
+        % -
+        % load workspace
         VE.workspace_fun('load',false);
     end
-    function obj=loadLastWS()
+    function ws_load_last()
         VE.workspace_fun('load',true);
     end
-    function obj=deleteWS()
+    function ws_rm()
+        % -
+        % remove saved workspace
         VE.workspace_fun('delete',false);
     end
 end
-properties(Access={?Px,?PxInstaller,?BaseInstaller,?PxBaseUnInstaller,?PxUnInstaller,?PxPrjOptions})
+properties(Access={?Px,?PxInstaller,?BaseInstaller,?PxBaseUnInstaller,?PxUnInstaller,?PxPrjOptions,?PxHistorian,?PxWorkspacer})
     args
     opts
     Px
@@ -144,6 +387,7 @@ properties(Access={?Px,?PxInstaller,?BaseInstaller,?PxBaseUnInstaller,?PxUnInsta
     mode
     exitflag={'',''}
 
+    bTemp
     bTest=false
     installDir
     rootDir
@@ -169,8 +413,15 @@ properties(Access={?Px,?PxInstaller,?BaseInstaller,?PxBaseUnInstaller,?PxUnInsta
     OUT
 end
 properties(Constant,Access=private)
-   MODES={'self','run','ls_env','get_env','ls_deps','get_options','get_root_options'}
+   MODES={'self','run','ls_env','get_env','ls_deps','ls_deps_rev','ls_hooks','get_options','get_root_options'}
    CRITFILES={'VE.m','src','alias'}
+   CMDS={'help','cd','pwd','reload','config','new','rm','rename','ls','dirname','ws','hook','compile','todo','notes'}
+   CONFIG={'config_root','config_etc','config_pkg','config_hook','config_self'}
+   WS={'ws_save','ws_load','ws_rm'}
+   LS={'ls_deps','ls_dep','ls_env','ls_prj','ls_prjs','ls_self','ls_hooks','ls_rev'}
+   HIST={'hist_save','hist_load','hist_rm'}
+
+   MAIN={'help','cd','pwd','source','config'}
 end
 methods(Access=private)
     function obj=VE(mode,varargin)
@@ -217,7 +468,11 @@ methods(Access=private)
         switch obj.exitflag{1}
         case ''
             obj.bRestoreOnCl=false;
-            VE.persist(obj);
+            if obj.bTemp
+                return
+            else
+                VE.persist(obj);
+            end
             rmpath(obj.selfSrcPath);
             % rmpath(obj.basePath); XXX if symlinked &, will remove mb if dep
             rmpath(obj.binDir);
@@ -233,20 +488,45 @@ methods(Access=private)
             obj.OUT=cell(1,n);
             [obj.OUT{1:n}]=feval(obj.args{:});
         case 'ls_env'
-            obj.ls_env();
+            obj.ls_env_();
         case 'get_env'
             obj.get_env();
         case 'ls_deps'
-            ve=VE.persist();
-            disp(ve.Px.tbl);
-        case 'get_options'
-            ve=VE.persist();
-            obj.OUT=ve.Px.Opts;
-            if numel(obj.args) == 1
-                obj.OUT=obj.OUT{obj.args{1}};
-            elseif numel(obj.args) > 1
-                obj.OUT(args{:});
+            if strcmp(obj.args.prj,VE.pwd());
+                ve=VE.persist();
+            else
+                ve=VE('get','prj',obj.args.prj);
             end
+            disp(ve.Px.tbl);
+        case 'ls_hooks'
+            if isempty(obj.args) || strcmp(obj.args.prj,VE.pwd());
+                ve=VE.persist();
+            else
+                ve=VE('get','prj',obj.args.prj);
+            end
+            hooks=vertcat({ve.Px.Opts.I.posthook});
+            ind=find(~cellfun(@isempty,hooks));
+            obj.OUT=vertcat({ve.Px.Opts.I(ind).name})';
+        case 'ls_deps_rev'
+            % XXX
+        case 'get_options'
+            if isempty(obj.args) || strcmp(obj.args.prj,VE.pwd());
+                ve=VE.persist();
+            else
+                ve=VE('get','prj',obj.args.prj);
+            end
+            obj.OUT=ve.Px.Opts;
+
+            if isempty(obj.args)
+                return
+            end
+            ind=find(ismember(vertcat({obj.OUT.I.name}),obj.args));
+
+            if isempty(ind)
+                disp(['Invalid dependency name(s) ' strjoin(obj.args,',')]);
+                return
+            end
+            obj.OUT=obj.OUT.I(ind);
         case 'get_root_options'
             ve=VE.persist();
             obj.OUT=ve.Px.rootOpts;
@@ -285,8 +565,11 @@ methods(Access=private)
         else
             error('No Install directory provided');
         end
+        if isfield(obj.args,'temp')
+            obj.bTemp=obj.args.temp;
+        end
 
-        %obj.rootDir=[obj.installDir '.px' filesep];
+        %obj.rootDir=[obj.installDir 'pkg.cfg' filesep];
         obj.rootDir=[PxUtil.parent(obj.selfPath)];
         obj.bootDir=[obj.rootDir 'boot' filesep];
         obj.libDir=[obj.bootDir 'lib' filesep];
@@ -304,6 +587,11 @@ methods(Access=private)
             obj.args=rmfield(obj.args,'bMBTRecompile');
         else
             obj.opts.bMBTRecompile=false;
+        end
+        if isfield(obj.args,'temp')
+            obj.bTemp=obj.args.temp;
+        else
+            obj.bTemp=false;
         end
     end
     function obj=restore_path_on_cl(obj)
@@ -338,7 +626,7 @@ methods(Access=private)
         obj.bMidInstall=strcmp(obj.bootDir,obj.selfPath);
         % XXX HANDLE THI SLAST ONE
     end
-    function ls_env(obj,dir)
+    function ls_env_(obj,dir)
         obj.get_env();
         disp(obj.OUT);
     end
@@ -348,16 +636,49 @@ methods(Access=private)
             return
         end
         obj.OUT=Fil.cell(obj.envFile);
-        for i = 1:size(obj.OUT,1)
-            try
-                obj.OUT{i,2}=Env.var(obj.OUT{i});
-            catch
-                obj.OUT{i,2}='';
-            end
-        end
+        obj.OUT(:,2)=Env.var(obj.OUT(:,1));
     end
 end
 methods(Static, Access=private)
+    function [bGd,STR]=cmd_helper(thing,name)
+        C=VE.(name);
+        if ismember(name,{'CMDS','MAIN','WS','HIST'})
+            bCmd=true;
+            type='commands';
+            t='command';
+            line=3;
+        else
+            bCmd=false;
+            type='arguments';
+            t='argument';
+            line=2;
+        end
+        STR='';
+        lname=Str.Alph.lower(name);
+        full=[lname '_' thing];
+        if isempty(thing)
+            bGd=false;
+        elseif ~ismember(thing,C) && ~ismember(full,C);
+            bGd=false;
+            STR=['  Invalid ' t ' ''' thing '''' newline];
+        else
+            bGd=true;
+        end
+        if ~bGd
+            STR=[STR '  Valid ' type ':'];
+            out=VE.get_help_short(C,line);
+            if bCmd
+                out=Cell.toStr([C' out']);
+            else
+                C=strrep(C, [lname '_'], '');
+                out=Cell.toStr([C' out']);
+            end
+            STR=[STR newline Str.tabify(out,4)];
+            if nargout < 2
+                disp(STR);
+            end
+        end
+    end
     function out=persist(ve)
         global VE__
         if nargin > 0
@@ -390,35 +711,92 @@ methods(Static, Access=private)
     end
     function edit_(prj,type)
         if isempty(prj)
-            prj=VE.getName();
+            prj=VE.pwd();
         elseif ~VE.isProject(prj)
             error(['Cannot find project ' prj ]);
         end
 
+
+        configExt='.cfg';
+
+        opts=VE.ls_self();
         switch type
+            case 've'
+                fname=[Env.var('PX_ETC') 've.cfg'];
+                ed=opts{'configEditor'};
             case 'root'
-                fname=[Env.var('PX_ETC') 'Px.config'];
-            case 'env'
-                fname=[Env.var('PX_ETC') 'ENV.config'];
-            case 'prj'
-                fname=[Env.var('PX_PRJS_ROOT') prj filesep '.px'];
+                fname=[Env.var('PX_ETC') 'root.cfg'];
+                ed=opts{'configEditor'};
+            case 'pkg'
+                fname=[Env.var('PX_PRJS_ROOT') prj filesep 'pkg.cfg'];
+                ed=opts{'configEditor'};
             case 'etc'
-                fname=[Env.var('PX_ETC') prj '.config'];
+                fname=[Env.var('PX_ETC') prj '.cfg'];
+                ed=opts{'configEditor'};
             case 'hook'
-                fname=[Env.var('PX_PRJS_ROOT') prj filesep '.px.m'];
+                dire=[Env.var('PX_ETC') prj '.d' filesep];
+                if ~exist(dire,'dir')
+                    mkdir(dire);
+                end
+                fname=[dire 'posthook.m'];
+                ed=opts{'externalEditor'};
             case 'todo'
-                fname=[Env.var('PX_PRJS_ROOT') prj filesep 'todo.org'];
+                fname=[Env.var('PX_PRJS_ROOT') prj filesep 'todo' opts{'todoExt'}];
+                ed=opts{'todoEditor'};
             case 'notes'
-                fname=[Env.var('PX_PRJS_ROOT') prj filesep 'notes.org'];
+                fname=[Env.var('PX_PRJS_ROOT') prj filesep 'notes' opts{'notesExt'} ];
+                ed=opts{'notesEditor'};
+            case 'readme'
+                fname=[Env.var('PX_PRJS_ROOT') prj filesep 'README' opts{'readmeExt'}];
+                ed=opts{'readmeEditor'};
         end
         if ~Fil.exist(fname)
             Fil.touch(fname);
         end
-        edit(fname);
-        disp('Run VE.r for changes to take effect')
+        if isempty(ed) || ismember(ed,{'matlab','mat','MATLAB','MAT'})
+            edit(fname);
+        elseif isunix
+            cmd=[ed ' ' fname];
+            [out1,out2]=unix(cmd);
+        elseif ispc
+            cmd=[ed ' ' fname];
+            system(cmd);
+        end
+        disp('Run ''ve reload'' for changes to take effect')
+    end
+    function out=get_help_short(cmd,line)
+        if iscell(cmd)
+            out=cellfun(@(x) VE.get_help_short(x,line),cmd,'UniformOutput',false);
+            return
+        end
+        out=help(['VE.' cmd]);
+        spl=strsplit(out,newline);
+        if numel(spl) >= line
+            out=spl{line};
+        else
+            out=spl{1};
+        end
+    end
+    function get_help(cmd)
+        if ismethod(VE.cmd)
+        end
     end
 end
 methods(Static, Hidden)
+    function get_deps_rev(prj)
+        % TODO, read files to be sure
+    end
+    function [files,PRJS]=get_all_pkg_files()
+        dire=Dir.parse(getenv('PX_PRJS_ROOT'));
+        PRJS=Dir.dirs(dire);
+        opts=VE.ls_self();
+        ignore=opts{'ignoreDirs'};
+        PRJS(ismember(PRJS,ignore))=[];
+        files=strcat(dire,PRJS,filesep,'pkg.cfg');
+        ind=~cellfun(@Fil.exist,files);
+        files(ind)=[];
+        PRJS(ind)=[];
+    end
     function updateDev()
         instDir=PxUtil.dirParse(getenv('PX_INSTALL'));
         prjDir=[PxUtil.dirParse(getenv('PX_PRJ'))];

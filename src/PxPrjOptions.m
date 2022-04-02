@@ -380,7 +380,11 @@ methods
             name=Str.Alph.upper(obj.I(i).name);
             for i = 1:length(flds)
                 fld=flds{i};
-                FLD=[name '__' Str.Alph.upper(fld)];
+                if  strcmp(name,obj.PX.prj)
+                    FLD=Str.Alph.upper(fld);
+                else
+                    FLD=[name '__' Str.Alph.upper(fld)];
+                end
                 val=cur{fld};
                 if isnumeric(val)
                     val=Num.toStr(val);

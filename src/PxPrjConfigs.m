@@ -14,7 +14,7 @@ methods
     end
     function OUT=get_prj_configs(obj,prj,type,dire,parcfg)
         cfg=dict();
-        cfgFname=[dire '.px'];
+        cfgFname=[dire 'pkg.cfg'];
         if Fil.exist(cfgFname)
             cfg=Cfg.read(cfgFname,[],[],obj.PX.sys.hostname);
         end

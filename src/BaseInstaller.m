@@ -88,7 +88,7 @@ methods
             Error.warnSoft('Mex comapilation is not setup');
             return
         end
-        if Fil.exist(obj.cmpFile)
+        if exist(obj.cmpFile,'file') && ~exist(obj.cmpFile,'dir')
             delete(obj.cmpFile);
         end
 
@@ -109,7 +109,7 @@ methods
         %winBadList={};
         bFirst=true;
         for i = 1:length(list)
-            if contains(list{i},winBadList)
+            if ispc() && contains(list{i},winBadList)
                 continue
             end
         %%%%

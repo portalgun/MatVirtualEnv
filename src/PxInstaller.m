@@ -96,7 +96,7 @@ methods(Access={?VE,?InstallerTools})
         if logical(exist([installLoc '.internal' filesep '.installed']));
             error(['Px not installed at ' installLoc ]);
         end
-        obj.root=[installLoc '.px' filesep 'boot' filesep];
+        obj.root=[installLoc '.px' filesep 'boot' filesep]; % XXX
 
         Px.rm_rf([obj.root 'MatBaseTools']);
         Px.rm_rf(obj.root);
@@ -265,7 +265,7 @@ methods(Access={?VE,?InstallerTools})
     end
     function out=find_install_config(obj,opts)
         out=false;
-        fname=[obj.selfPath 'Px.config'];
+        fname=[obj.selfPath 've.cfg'];
         if exist(fname,'file')
             obj.rootconfigfile=fname;
             out=true;
@@ -276,7 +276,7 @@ methods(Access={?VE,?InstallerTools})
         if ~exist(etc,'dir')
             mkdir(etc);
         end
-        dest=[etc 'Px.config'];
+        dest=[etc 've.cfg'];
         copyfile(obj.rootconfigfile, dest);
         obj.rootconfigfile=dest;
     end
