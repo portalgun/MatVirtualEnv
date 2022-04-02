@@ -1,18 +1,15 @@
-* MatVE
-Matlab Virtual Environment:
+* MatVE: Matlab Virtual Environment
 Path/Project/Package/Session/History manager
 
 ** Description
-MatVE is a tool that manages your matlab environment on a by-project basis.
-This means only including files, variables, and packages that are relevant to your projects.
+MatVE is a tool that manages your matlab environment on a by-project basis. This means only including files, variables, and packages that are relevant to your projects.
 
-MatVE is designed to be useable within minutes; 90% of its use is centered around only a few easy to remember commands.
-But it is also designed to be feature rich and very customizable if you so choose.
+MatVE is designed to be useable within minutes; 90% of its use is centered around only a few easy to remember commands, but it is also designed to be feature rich and very customizable if you so choose.
 
 ** Basic Usage
-Configuration is centered around project directories. During installation, a specify a root projects directory where my various projects are kept. Any directory the root projects directory is considered an independent project.
+Configuration is centered around project directories. During installation, you are prompted for root projects directory where your various projects are kept. Any directory the root projects directory is considered its own project.
 
-Post installation, use is straightforward.
+Post installation, use is straightforward:
 #+begin_src matlab
     > mve [command] [arguments]
 #+end_src
@@ -25,8 +22,10 @@ Leave out the project name, and MVE will spit out a list of available projects t
 This follows a consistent principle with MVE -- if you don't remember a command or argument, just ommit it and mve will describe your options
 #+begin_src matlab
 > mve
+TODO
 > mve config
-#_end_src
+TODO
+#+end_src
 
 ** List of commands
 List of commands:
@@ -44,21 +43,27 @@ List of commands:
 
 
 ** Installtation
+In matlab run the following with brackets filled in:
+#+begin_src matlab
+cd [where you want MVE installed]
+!git clone git@github.com:portalgun/MatVirtualEnv.git
+cd MatVirtualEnv
+VEinstall
+#+end_src
 Installation integrates MVE with your startup, so you can automatically continue where you left off when you restarted matlab.
 
 ** Configuration
-Open configuration for editing
-#+begin_src
-> mve config [arg]
-#+end_src
-#+begin_src
+
+#+begin_src matlab
+> mve config [type] % Open configuration of a specific type for editing
+%% Config Types and args:
   source/src [name] % source configuration for invidiual package (current if name is ommitted)
                     %    these are configurations that are *not* specific to any end user.
-  user/usr [name]   % User configuration for invidiual package (current if name is ommitted)
+  user [name]       % User configuration for invidiual package (current if name is ommitted)
                     %    these are configurations that *are* specific to you as the end user.
   root              % User configuration that are persistent across all projects
                     %    these are configurations that *are* specific to you as the end user.
-  mve/ve            % User configuration for MVE itself
+  mve               % User configuration for MVE itself
                     %    these are configurations that *are* specific to you as the end user of MVE.
   hook [name]       % Hook configuration for individual project (current if name is ommitted)
 #+end_src
@@ -97,8 +102,7 @@ Depnecencies are loaded according to the order in which they are listed.
 
 **** (l)ibrary dependencies
 If you are using somebody elses' work, that you arn't going to change yourself (other than configurat), you would list it as a library dependency.
-In the 'MatBaseTools' example, a url and version are provided.  If I don't have this package already installed, MVE will fetch it and set it up for me.
-Anything that is nested under l or p is treated as a dependency.
+In the 'MatBaseTools' example, a url and version are provided.  If I don't have this package already installed, MVE will fetch it and set it up for me. Anything that is nested under l or p is treated as a dependency.
 
 If you don't have any l-type dependencies, ommit it entirely.
 
