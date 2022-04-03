@@ -5,6 +5,8 @@ properties
     errorFlag=false
     errors=cell(0,2)
     bForce
+    warnings={};
+    bGLNXA64
 end
 properties(Access=private)
     PX
@@ -16,7 +18,7 @@ methods
     function obj=PxCompiler(PX)
         obj.PX=PX;
         obj.Opts=PX.Opts;
-
+        obj.bGLNXA64=strcmp(computer,'GLNA64');
         if ismac
             obj.re='.*\.c[p]*$';
         else
@@ -99,6 +101,12 @@ methods
         optFiles=fieldnames(Opts.mex);
         ind=find(Str.RE.ismatch(optFiles,obj.re));
         bSuccess=false;
+
+        lstwrn=lastwarn;
+        lastwarn('');
+        cl=cell(1,1);
+        cl{1}=onCleanup(@() lastwarn(lstwrn));
+
         for j = ind
             oFname=optFiles{j};
             fInd=ismember(fFnames,oFname);
@@ -121,12 +129,19 @@ methods
             end
 
             cd(dire);
-            [bRan,ME,cmd,obj.bFirst]=PxCompiler.mex_compile(fname, obj.PX.dirs.prj.bin,obj.bForce,obj.bFirst);
+            [bRan,ME,cmd,obj.bFirst]=PxCompiler.mex_compile(fname, obj.PX.dirs.prj.bin,obj.bForce,obj.bFirst,obj.bGLNXA64);
             if ~bRan
                 obj.errorFlag=true;
                 obj.errors{end+1,1}=ME;
                 obj.errors{end  ,2}=cmd;
                 Error.warnSoft('Compilation errors:',ME);
+                continue
+            end
+            warn=lastwarn;
+            if ~isempty(warn)
+                obj.warnings{end+1}=warn;
+                cl{end+1}=onCleanup(@() warning(warn,'on'));
+                warning(warn,'off');
             end
         end
     end
@@ -139,7 +154,10 @@ methods
     end
 end
 methods(Static)
-    function [bSuccess,ME,cmd,bFirst]=mex_compile(fname,outdir,bForce,bFirst)
+    function [bSuccess,ME,cmd,bFirst]=mex_compile(fname,outdir,bForce,bFirst,bGLNXA64)
+        if nargin < 5
+            bGLNXA64=strcmp(computer,'GLNXA64');
+        end
         bSuccess=false;
         ME=[];
         cmd=[];
@@ -173,16 +191,18 @@ methods(Static)
             bFirst=false;
             disp('Compiling...')
         end
+
         %cmd=['mex -outdir ' outdir ' ' fname flags];
         cmd=['mex -silent -outdir ' outdir ' ' fname flags];
         try
-            eval(cmd);
+            out=evalc(cmd);
             bSuccess=true;
         catch ME
-            cmd
-            ME.message
-            if contains(ME.message,'mexa64'' is not a MEX file. ')
+            if bGLNXA64 && contains(ME.message,'mexa64'' is not a MEX file. ')
                 bSuccess=true;
+            else
+                disp(cmd)
+                Error.WarnSoft(ME.message);
             end
         end
     end

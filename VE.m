@@ -403,9 +403,18 @@ properties(Access={?Px,?PxInstaller,?BaseInstaller,?PxBaseUnInstaller,?PxUnInsta
     rootDir
     bootDir
     libDir
+    prjDir
     binDir
     intDir
 
+    etcDir
+    extDir
+    medDir
+    datDir
+
+    existPrjDir=''
+
+    startupFile
     diaryFile
     envFile
     lastSavedWrk
@@ -418,6 +427,7 @@ properties(Access={?Px,?PxInstaller,?BaseInstaller,?PxBaseUnInstaller,?PxUnInsta
     selfSrcPath
     aliasPath
     basePath
+    userPath
 
     bSuccess
     OUT
@@ -434,13 +444,18 @@ properties(Constant,Access=private)
    MAIN={'help','cd','pwd','source','config'}
 end
 methods(Access=private)
-    function obj=VE(mode,varargin)
+    function obj=VE(moude,varargin)
         if nargin < 1
-            mode=[];
+            moude=[];
         end
-        obj.mode=mode;
+        obj.mode=moude;
+        VE.warnOff();
 
         % INTIALIZE PATH
+        if ismember(obj.mode,PxInstaller.MODES)
+            obj.startupFile=which('startup');
+            obj.userPath=userpath;
+        end
 
         obj.get_self_path();
         obj.lastDir=builtin('cd',obj.selfPath);
@@ -461,13 +476,10 @@ methods(Access=private)
 
         if ismember(obj.mode,VE.MODES)
             obj.mode_selector();
-        elseif strcmp(obj.mode,'reinstallPx')
-            obj.PxU=PxBaseUnInstaller(obj);
-            obj.PxI.mode_handler();
         elseif ismember(obj.mode,PxUnInstaller.MODES);
             obj.PxU=PxBaseUnInstaller(obj);
         elseif ismember(obj.mode,PxInstaller.MODES);
-            obj.PxI.mode_handler();
+            exitflag=obj.PxI.mode_handler();
         elseif ~obj.PxI.bInstalled
             error('VE not installed');
         else
@@ -564,45 +576,68 @@ methods(Access=private)
         else
             obj.args=struct(varargin{:});
         end
+
+        bReInstall=strcmp(obj.mode,'reinstallPx');
+
         if isfield(obj.args,'installDir')
             obj.installDir=obj.args.installDir;
             if ~endsWith(obj.installDir,filesep);
                 obj.installDir=[obj.InstallDir filsep];
             end
             obj.args=rmfield(obj.args,'installDir');
-        elseif ~exist([obj.selfPath '.git'],'dir')
-            obj.installDir=PxUtil.parent(PxUtil.parent(obj.selfPath));
-        else
+        elseif ~exist([obj.selfPath '.internal' filesep '.installed'],'file')
             error('No Install directory provided');
-        end
-        if isfield(obj.args,'temp')
-            obj.bTemp=obj.args.temp;
         end
 
         %obj.rootDir=[obj.installDir 'pkg.cfg' filesep];
-        obj.rootDir=[PxUtil.parent(obj.selfPath)];
+        if isempty(obj.installDir)
+            obj.rootDir=[PxUtil.parent(obj.selfPath)];
+        else
+            obj.rootDir=obj.installDir;
+        end
+
         obj.bootDir=[obj.rootDir 'boot' filesep];
+        obj.prjDir=[obj.rootDir 'prj' filesep];
         obj.libDir=[obj.bootDir 'lib' filesep];
         obj.binDir=[obj.bootDir 'bin' filesep];
         obj.intDir=[obj.bootDir '.internal' filesep];
+
+        obj.etcDir=[obj.rootDir 'etc' filesep];
+        obj.extDir=[obj.rootDir 'ext' filesep];
+        obj.medDir=[obj.rootDir 'media' filesep];
+        obj.datDir=[obj.rootDir 'data' filesep];
+
         obj.envFile=[obj.intDir 'env'];
         obj.diaryFile=[obj.intDir 'log'];
         obj.lastSavedWrk=[obj.intDir 'last_saved_wrk'];
-        if isfield(obj.args,'bTest')
-            obj.bTest=obj.args.bTest;
-            obj.args=rmfield(obj.args,'bTest');
+
+        flds={...
+             'bTest',false;
+             'bTemp',false;
+        };
+        for i = 1:size(flds,1)
+            fld=flds{i,1};
+            if isfield(obj.args,fld)
+                obj.(fld)=obj.args.(fld);
+                obj.args=rmfield(obj.args,fld);
+            else
+                obj.(fld)=flds{i,2};
+            end
         end
-        if isfield(obj.args,'bMBTRecompile')
-            obj.opts.bMBTRecompile=obj.args.bMBTRecompile;
-            obj.args=rmfield(obj.args,'bMBTRecompile');
-        else
-            obj.opts.bMBTRecompile=false;
+        flds={...
+             'bMBTRecompile',bReInstall;
+             'bMBTReinstall',bReInstall;
+        };
+        for i = 1:size(flds,1)
+            fld=flds{i,1};
+            if isfield(obj.args,fld)
+                obj.opts.(fld)=obj.args.(fld);
+                obj.args=rmfield(obj.args,fld);
+            else
+                obj.opts.(fld)=flds{i,2};
+            end
         end
-        if isfield(obj.args,'temp')
-            obj.bTemp=obj.args.temp;
-        else
-            obj.bTemp=false;
-        end
+
     end
     function obj=restore_path_on_cl(obj)
         warning('on','MATLAB:dispatcher:nameConflict');
@@ -617,8 +652,9 @@ methods(Access=private)
         restoredefaultpath;
     end
     function get_self_path(obj)
-        spl=strsplit(mfilename('fullpath'),filesep);
-        obj.selfPath=[strjoin(spl(1:end-1),filesep) filesep];
+        %spl=strsplit(mfilename('fullpath'),filesep);
+        %obj.selfPath=[strjoin(spl(1:end-1),filesep) filesep];
+        obj.selfPath=strrep(which('VE'),'VE.m','');
     end
     function add_self_path(obj)
         obj.selfSrcPath=[obj.selfPath 'src' filesep];
@@ -650,6 +686,9 @@ methods(Access=private)
     end
 end
 methods(Static, Access=private)
+    function first_startup()
+        VE('startup1');
+    end
     function [bGd,STR]=cmd_helper(thing,name)
         C=VE.(name);
         if ismember(name,{'CMDS','MAIN','WS','HIST'})
@@ -872,6 +911,9 @@ methods(Static, Hidden)
     end
     function out=get_data_dir()
         out=getenv('PX_CUR_DATA');
+    end
+    function warnOff()
+        warning('off','MATLAB:dispatcher:nameConflict');
     end
 end
 end

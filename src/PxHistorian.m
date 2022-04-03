@@ -16,7 +16,7 @@ methods
         obj.matDir=Dir.parse(prefdir);
         if bHistory && ~Fil.exist(obj.bHistFile)
             obj.install();
-        elseif ~bHistory && Fi.exist(obj.HistFile)
+        elseif ~bHistory && Fil.exist(obj.bHistFile)
             obj.uninstall();
         end
     end

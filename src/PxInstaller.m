@@ -1,11 +1,17 @@
 classdef PxInstaller < handle
 properties
     ve
+    opts=struct()
     bInstalled
+    restoreDir
+
 
     instFile
-    args
+    srcInstlrFile
+    destInstlrFile
+    oldPath
     oldInstall
+    bComplete=false
 end
 properties(Constant)
     MODES={'installPx','install2','reinstallPx'}
@@ -14,12 +20,15 @@ methods(Access={?VE,?InstallerTools})
     function obj=PxInstaller(ve)
         obj.ve=ve;
         obj.get_install_status();
-        if ~obj.bInstalled
+
+        if ismember(obj.ve.mode,PxInstaller.MODES)
             obj.init_install_dir();
         end
     end
     function obj=get_install_status(obj);
-        obj.instFile=[obj.ve.intDir 'installed'];
+        obj.instFile=[obj.ve.intDir '.installed'];
+        obj.destInstlrFile=[obj.ve.bootDir '.installer'];
+        obj.srcInstlrFile=[obj.ve.selfPath '.installer'];
         if ~exist(obj.ve.bootDir,'dir') || ~exist(obj.ve.intDir,'dir')
             obj.bInstalled=false;
         else
@@ -53,44 +62,36 @@ methods(Access={?VE,?InstallerTools})
         end
     end
 %%%
-    function parse_args(obj)
-        P=PxInstaller.get_parse();
-        % XXX
-    end
-    function mode_handler(obj);
-        switch obj.mode
-        case 'insallPx'
+    function exitflag=mode_handler(obj);
+        exitflag=false;
+        switch obj.ve.mode
+        case 'installPx'
             if obj.bInstalled
-                error('Px already installed');
+                exitflag=true;
+                PxUtil.warnSoft('MVE already installed');
+                out=PxUtil.yn('Reinstall');
+                if out==1
+                    obj.reinstall_px();
+                end
+                return
             end
-            obj.install_px(varargin{2:end});
+            obj.install_px();
             return
         case 'uninstallPx'
             obj.uninstall_px();
             return
         case 'reinstallPx'
-            clear Px Px_util;
-            rehash path;
-            obj.reinstall_px(varargin{2:end});
-            return
-        case 'install2'
-            obj.selfPath=varargin{2};
-            obj.root=varargin{3};
-            obj.rootconfigfile=varargin{4};
-            obj.linkPrj=varargin{5};
-
-            obj.setup_base_tools();
-            obj.config_root();
+            obj.reinstall_px();
             return
         end
     end
-    function obj=reinstall(obj,varargin)
-        installLoc=varargin{1};
+    function obj=reinstall_px(obj,varargin)
+        installLoc=obj.ve.installDir;
         if ~endsWith(installLoc,filesep)
             installLoc=[installLoc filesep];
         end
         if ~exist(installLoc,'dir')
-            error(['Install path ' installLoc '  does not exist']);
+            error(['Install path ' installLoc ' does not exist']);
         end
 
         if logical(exist([installLoc '.internal' filesep '.installed']));
@@ -118,192 +119,155 @@ methods(Access={?VE,?InstallerTools})
 
 
     end
-    function obj=install(obj,varargin);
-        oldPath=path;
-        assignin('base','oldPath','path');
-        bComplete=false;
+    function dire_fun(obj,name)
+        errstr='%s %s does not exist. Manually make this directory if this is intentional.';
+        if ~isempty(obj.opts.(name)) && ~endsWith(obj.opts.(name),filesep)
+            obj.opts.(name)=[obj.opts.(name) 'filesep'];
+        end
+        src=obj.opts.(name);
+        dest=obj.ve.(name);
+        bSame=strcmp(src,dest);
+
+        fld=regexprep(name,'Dir$','');
+        fld(1)=upper(fld(1));
+        moveOpt=obj.opts.(['moveOpt' fld]);
+
+        if (isempty(src) || bSame) && ~Dir.exist(dest)
+            mkdir(dest);
+        elseif ~~isempty(src) && Dir.exist(src)
+            error(errstr,name,src);
+        elseif ~isempty(src) && ~bSame
+            if moveOpt==0
+                copyfile(src,dest);
+            elseif moveOpt==1
+                movefile(src, dest);
+                Dir.write([obj.restoreDir name],src,true);
+            elseif moveOpt==2
+                FilDir.easyln(src,dest);
+            end
+        end
+
+    end
+    function obj=install_px(obj,varargin);
+        installLoc=obj.ve.installDir;
+        obj.parse_installPx();
+
+        obj.make_restore_dire;
         %cl=onCleanup(@() Px.restore_path(bComplete,old));
 
-        restoredefaultpath;
-        if length(varargin) == 0
-            error('Px Install: install destination directory required for first parameter');
+        % Make/link DIRECTORIES
+        P=PxInstaller.getP();
+        for i = 1:size(P,1)
+            name=P{i,1};
+            if startsWith(name,'moveOpt')
+                continue
+            end
+            obj.dire_fun(name);
         end
-
-        % INSTALLOC
-        installLoc=varargin{1};
-        if ~endsWith(installLoc,filesep)
-            installLoc=[installLoc filesep];
-        end
-        installLoc=strrep(installLoc,'../',Dir.parent(pwd));
-        rootpar=obj.parent(installLoc);
-        if ~exist(rootpar,'dir')
-            error(['Install location ' rootpar ' does not exist. Manually make this directory fi this is intentional.']);
-        end
-        obj.root=[installLoc];
-
-        % PRJLOC
-        if length(varargin) > 1
-            prjLoc=varargin{2};
-        else
-            prjLoc='';
-        end
-        if ~endsWith(prjLoc,filesep)
-            prjLoc=[prjLoc filesep];
-        end
-        prjLoc=strrep(prjLoc,'../',Dir.parent(pwd));
-        if ~exist(prjLoc,'dir')
-            error(['Project location ' prjLoc ' does not exist. Manually make this directory if this is intentional.']);
-        elseif ~isempty(prjLoc) && ~strcmp(prjLoc,[obj.root 'prj' filesep])
-            movefile(prjLoc,[obj.root 'prj']);
-        end
-
-        % LIBLOC
-        if length(varargin) > 2
-            libLoc=varargin{3};
-        else
-            libLoc='';
-        end
-        if ~endsWith(libLoc,filesep)
-            libLoc=[libLoc filesep];
-        end
-        libLoc=strrep(libLoc,'../',Dir.parent(pwd));
-        if ~isempty(libLoc) && ~exist(libLoc,'dir')
-            error(['Lib location ' libLoc ' does not exist. Manually make this directory if this is intentional.']);
-        elseif ~isempty(libLoc) && ~strcmp(libLoc,[obj.root 'lib' filesep])
-            movefile(libLoc,[obj.root 'lib']);
-        end
-        obj.make_restore_dire(oldPath,prjLoc,libLoc);
-
-        %OPTIONS
-        if length(varargin) > 3
-            opts=struct(varargin{3:end});
-        else
-            opts=struct();
-        end
-        obj.parse_installPx(opts);
 
         obj.move_self();
-        out=obj.find_install_config();
-        if out
-            obj.copy_config();
-        end
-        old=cd(obj.selfPath);
-        %cl=onCleanup(@() cd(old));
-        %obj.setup_base_tools();
+
+        obj.copy_config();
 
         obj.handle_startup();
-        %Px('install2',obj.selfPath,obj.root,obj.rootconfigfile,obj.linkPrj);
 
-        fname=[obj.ve.intDir '.installed'];
-        fclose(fopen(fname, 'w'));
-        bComplete=true;
+        obj.mark_installed();
 
-        clear Px Px_util;
-        rehash path;
-        obj.setup_base_tools();
+        restoredefaultpath;
+        cd(obj.ve.bootDir);
+        clear VE Px Px_util
+        disp('Path reset. Old path assigned to your workspace as ''oldPath''');
+        %evalin('base','VE.startup;');
+        VE.startup;
 
-        clear Px Px_util;
-        rehash path;
-
-        disp('New path applied. Old path assigned to your workspace as ''oldPath''');
-
-        %disp('Run ''clear Px Px_util Px_git startup; startup''')
-        %cur=[obj.selfPath 'postinstall'];
-        addpath(pwd);
-
-
-        evalin('base','postinstall');
-        obj.rm_install_files();
-
-        %cd(obj.selfPath);
-        %Px.startup();
     end
-    function make_restore_dire(obj,oldPath,prjLoc,libLoc)
-        restoreDir=[obj.selfPath '.restore' filesep];
-        mkdir(restoreDir);
-
-        Dir.write([restoreDir 'oldPath'],oldPath,true);
-        if ~isempty(prjLoc)
-            Dir.write([restoreDir 'prjLoc'],prjLoc,true);
+    function mark_installed(obj)
+        fclose(fopen(obj.instFile, 'w'));
+        obj.bComplete=true;
+    end
+    function oldPath=make_restore_dire(obj)
+        obj.restoreDir=[obj.ve.bootDir '.restore' filesep];
+        if ~Dir.exist(obj.restoreDir)
+            mkdir(obj.restoreDir);
         end
-        if ~isempty(libLoc)
-            Dir.write([restoreDir 'libLoc'],libLoc,true);
+        fil=[obj.restoreDir 'oldPath'];
+        if ~Fil.exist(fil)
+            Fil.write(fil,obj.ve.lastPath,true);
+            oldPath=obj.ve.lastPath;
+        else
+            oldPath=Fil.cell(fil);
+            oldPath=oldPath{1};
         end
-
+        assignin('base','oldPath',oldPath);
     end
     function rm_install_files(obj)
         Dir.rm_rf(obj.oldInstall);
     end
     function handle_startup(obj)
-        text=['cd ' obj.selfPath '; Px.startup; %PXSTARTUP'];
+        txt=['cd ' obj.ve.bootDir '; VE.startup; %MVE STARTUP'];
 
-        fname=which('startup');
+        fname=obj.ve.startupFile;
         if ~isempty(fname) && Fil.contains(fname,'%PXSTARTUP');
             return
         elseif ~isempty(fname)
-            dir=fileparts(fname);
+            dire=fileparts(fname);
         end
 
-        up=userpath;
+        up=obj.ve.userPath;
         if isempty(up)
             up=[ getenv('HOME') filesep 'Documents' filesep 'MATLAB' ];
         end
 
-        if ~isempty(fname) &&  contains(dir,matlabroot)
+        if (isempty(fname) && Dir.exist(up)) || (~isempty(fname) && contains(dire,matlabroot))
             fname=[up filesep 'startup.m'];
             fid = fopen(fname, 'w');
         elseif ~isempty(fname)
             fid = fopen(fname, 'a');
         else
-            error('Cannot find suitable startup file');
+            error('Cannot find suitable startup file or location to create one');
         end
         cl=onCleanup(@() fclose(fid));
-        fprintf(fid, '%s', text);
+        fprintf(fid, '%s', txt);
     end
     function opts=parse_installPx(obj,opts)
-        % TODO
+        obj.opts=Args.parse([],PxInstaller.getP(),obj.ve.args);
     end
     function out=find_install_config(obj,opts)
-        out=false;
-        fname=[obj.selfPath 've.cfg'];
-        if exist(fname,'file')
-            obj.rootconfigfile=fname;
-            out=true;
-        end
     end
-    function obj=copy_config(obj)
-        etc=[obj.root 'etc' filesep];
-        if ~exist(etc,'dir')
-            mkdir(etc);
+    function copy_config(obj)
+        out=false;
+        fname=[obj.ve.selfPath 've.cfg'];
+        if ~exist(fname,'file')
+            return
+        end
+        if ~Dir.exist(obj.ve.etc)
+            mkdir(obj.ve.etc);
         end
         dest=[etc 've.cfg'];
-        copyfile(obj.rootconfigfile, dest);
-        obj.rootconfigfile=dest;
+        copyfile(fname, dest);
     end
     function obj=move_self(obj)
-        if ~exist(obj.root,'dir')
-            mkdir(obj.root);
+        copyfile(obj.ve.selfPath,obj.ve.bootDir);
+        if exist(obj.destInstlrFile,'file')
+            delete(obj.destInstlrFile);
         end
-        obj.oldInstall=obj.selfPath;
-        dest=[obj.root 'boot' filesep];
-        copyfile(obj.selfPath,dest);
-        obj.selfPath=dest;
     end
 end
 methods(Static)
-    function P=get_parse()
+    function P=getP()
         P={ ...
-           'bTest',[],'isBinary';...
-           'bForce',[],'isBinary'; ...
-           'root',[],'ischar_e'; ...
-           'installDir',[],'ischar_e';
-           'linkPrj',[],'ischar_e'
-           'prjLoc',[],'ischar_e';
-           'libLoc',[],'ischar_e';
-           'etcLoc',[],'ischar_e';
-           'extLoc',[],'ischar_e';
-           'datLoc',[],'ischar_e';
-           'medLoc',[],'ischar_e';
+           'moveOptPrj',0,'isbinary_e';
+           'moveOptLib',0,'isbinary_e';
+           'moveOptEtc',0,'isbinary_e';
+           'moveOptExt',0,'isbinary_e';
+           'moveOptMed',0,'isbinary_e';
+           'moveOptDat',0,'isbinary_e';
+           'prjDir','','ischar_e';
+           'libDir','','ischar_e';
+           'etcDir','','ischar_e';
+           'extDir','','ischar_e';
+           'medDir','','ischar_e';
+           'datDir','','ischar_e';
         };
     end
 end

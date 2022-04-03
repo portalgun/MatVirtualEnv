@@ -27,6 +27,25 @@ TODO
 TODO
 #+end_src
 
+
+** Installation
+In matlab run the following with brackets filled in:
+#+begin_src matlab
+cd [where you want MVE installed]
+!git clone git@github.com:portalgun/MatVirtualEnv.git
+cd MatVirtualEnv
+install([prjDir],[mvOption])
+#+end_src
+Here, [prjDir] and [bLink] are optional.
+[prjDir] specifies an existing project directory you might have and [mvOption] specifies whether or not you want that directory copied (0)(default), moved (1), linked (2). Linking your project directory keeps the directory in the same place without making a copy, but if you move it somehwere else manually, it will not longer work in MVE.
+
+If you don't specify a [prjDir], the first step post-installation will be to create a new project.
+#+begin_src
+  mve new [prj]      % create and switch to new project
+#+end_src
+
+Note that installation inserts a line within your startup.m file. On MATLAB startup, MVE will run and by default you will automatically continue in the last project you were working in.
+
 ** List of commands
 List of commands:
 #+begin_src matlab
@@ -40,17 +59,6 @@ List of commands:
   mve help           % see full list of commands
   mve help [cmd]     % get help for a command
 #+end_src
-
-
-** Installtation
-In matlab run the following with brackets filled in:
-#+begin_src matlab
-cd [where you want MVE installed]
-!git clone git@github.com:portalgun/MatVirtualEnv.git
-cd MatVirtualEnv
-VEinstall
-#+end_src
-Installation integrates MVE with your startup, so you can automatically continue where you left off when you restarted matlab.
 
 ** Configuration
 

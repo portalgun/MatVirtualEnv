@@ -89,7 +89,7 @@ end
 properties(Constant)
     div=char(59)
     sep=char(61)
-    MODES={'get','run_hook','rename','switch','prompt','reset','startup','all','list','compile_prj','compile_files'}
+    MODES={'get','run_hook','rename','switch','prompt','reset','startup','startup1','all','list','compile_prj','compile_files'}
     ROOTFLDS={'test','prvt','wrk','bin','prj','ext','tmp','var','lib','etc','data','media', 'log'}
     ROOTDIRS={'test','prvt','wrk','bin','prj','ext','tmp','var','lib','etc','data','media',['var' filesep 'log']}
     ROOTWRITE={'wrk','bin','media','tmp','var','log'}
@@ -147,7 +147,9 @@ methods(Access = ?VE)
             case 'reset'
                 obj.mode_reset();
             case 'startup'
-                obj.mode_startup();
+                obj.mode_startup(false);
+            case 'startup1'
+                obj.mode_startup(true);
             case 'list'
                 obj.disp_prjs();
             case 'compile_prj'
@@ -213,7 +215,7 @@ methods(Access = ?VE)
     function mode_reset(obj)
         obj.setup_prj();
     end
-    function mode_startup(obj)
+    function mode_startup(obj,bFirst)
         obj.bStartup=true;
         if isempty(obj.prj)
             obj.prompt_prj();
@@ -222,7 +224,9 @@ methods(Access = ?VE)
             return
         end
 
-        obj.setup_prj(obj.prj);
+        if ~isempty(obj.prj)
+            obj.setup_prj(obj.prj);
+        end
     end
     function mode_complile_files(obj)
         obj.make_prj_dirs();
@@ -244,12 +248,12 @@ methods(Access = ?VE)
         obj.Cmp.link_to_prj();
     end
 %% PRJS DISPLAY
-    function obj=get_prjs(obj)
+    function get_prjs(obj)
         obj.PRJS=Dir.dirs(obj.dirs.root.prj);
         ignore=obj.rootOpts{'ignoreDirs'};
         obj.PRJS(ismember(obj.PRJS,ignore))=[];
     end
-    function obj=disp_prjs(obj)
+    function disp_prjs(obj)
         fprintf(['%-31s' newline],'PROJECTS');
         for i = 1:length(obj.PRJS)
             if i > length(obj.PRJS)
@@ -261,10 +265,12 @@ methods(Access = ?VE)
             end
         end
     end
-    function obj=prompt_prj(obj)
+    function prompt_prj(obj)
         %PROMPT FOR PROJECT
         if ~obj.bStartup
             disp([newline '  r last open poject']);
+        elseif isempty(obj.PRJS)
+            return
         else
             disp(newline);
         end
@@ -355,7 +361,9 @@ methods(Access = ?VE)
         end
         if isempty(obj.rootCfgFile)
             dire=[Dir.parent(obj.ve.selfPath) 'etc' filesep];
-            mkdir(dire);
+            if ~Dir.exist(dire);
+                mkdir(dire);
+            end
             obj.rootCfgFile=[dire name];
             Fil.touch(obj.rootCfgFile);
         end
@@ -575,7 +583,7 @@ methods(Access = ?VE)
             end
         end
         obj.dirs.root.varlib=[obj.dirs.prj.var 'lib' filesep];
-        if ~obj.bTemp && ~Dir.exist([obj.dirs.prj.var 'lib' filesep])
+        if ~obj.bTemp && ~Dir.exist(obj.dirs.root.varlib)
             mkdir(obj.dirs.root.varlib);
         end
     end

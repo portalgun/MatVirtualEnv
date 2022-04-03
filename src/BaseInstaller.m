@@ -3,10 +3,13 @@ properties
     ve
     bInstalled
     bCompiled
+    bCompilable
     bForce
+    warn
 
     mbDir
     mbBinDir
+    dlFile
     instFile
     cmpFile
     bRestoreOnCl=false
@@ -22,9 +25,37 @@ methods
     function obj=BaseInstaller(ve)
         %cl=onCleanup(@() obj.restore_path_on_cl());
         obj.ve=ve;
+
+        obj.cmpFile=[obj.ve.intDir 'mb_compiled'];
+        obj.instFile=[obj.ve.intDir 'mb_installed'];
+        obj.dlFile=[obj.ve.intDir '.mb'];
+
+        if obj.ve.opts.bMBTReinstall;
+            obj.rm();
+        end
         obj.get_install_status();
+        obj.install();
+    end
+    function rm(obj)
+        if exist(obj.mbBinDir,'dir')
+            delete([obj.mbBinDir '\*']);
+        end
+        if exist(obj.mbDir,'dir')
+            delete([obj.mbDir '\*']);
+        end
+        if exist(obj.instFile,'file')
+            delete(obj.instFile);
+        end
+        if exist(obj.cmpFile,'file')
+            delete(obj.cmpFile);
+        end
+        if exist(obj.dlFile,'file')
+            delete(obj.dlFile);
+        end
+    end
+    function install(obj)
         if ~obj.bInstalled
-            obj.install();
+            obj.download();
         end
         obj.add_path;
         if ~obj.bInstalled
@@ -32,21 +63,49 @@ methods
             obj.bInstalled=true;
         end
 
-
         obj.get_compiled_status();
+        if ~isempty(obj.warn)
+            warning(obj.warn,'off');
+            cl=onCleanup(@(x) warning(obj.warn,'on'));
+        end
         if ~obj.bCompiled || obj.ve.opts.bMBTRecompile
             obj.get_mex_status();
-            obj.compile();
+            if obj.bCompilable
+                obj.compile();
+            else
+                PxUtil.warnSoft('Unable to compile base-tools: Some operations will be slower. Fix your C++ compiler for better performance.');
+            end
         end
     end
     function get_mex_status(obj);
         %% TODO
         obj.bMexSetup=true; % XXX TOOD
+        out=mex.getCompilerConfigurations('Cpp','Supported');
+        evalc('mex -setup C++');
+        copyfile(fullfile(matlabroot,'extern','examples','cpp_mex','arrayProduct.cpp'),'.','f');
+
+        lastwarn('');
+        try
+            out=evalc('mex arrayProduct.cpp');
+        catch ME
+            if strcmp(computer,'GLNXA64') && contains(ME.message,'.mexa64'' is not a MEX file.')
+                ;
+            else
+
+               obj.bCompilable=false;
+               return
+            end
+            obj.bCompilable=true;
+
+        end
+        obj.warn=lastwarn;
+        if ~isempty(obj.warn)
+            PxUtil.warnSoft(['Matlab mex ' obj.warn]);
+        end
     end
 %%%
     function obj=get_install_status(obj);
         obj.mbDir=[obj.ve.libDir 'MatBaseTools' filesep];
-        obj.instFile=[obj.ve.intDir 'mb_installed'];
         if ~exist(obj.ve.libDir,'dir')
             obj.bInstalled=false;
         elseif ~exist(obj.mbDir,'dir') && ~exist(obj.mbDir,'file')
@@ -58,7 +117,6 @@ methods
         end
     end
     function obj=get_compiled_status(obj)
-        obj.cmpFile=[obj.ve.intDir 'mb_compiled'];
         if ~exist(obj.ve.binDir,'dir') || ~exist(obj.ve.intDir,'dir')
             obj.bCompiled=false;
         else
@@ -66,11 +124,11 @@ methods
         end
     end
 %%%
-    function obj=install(obj)
+    function obj=download(obj)
         bHasGit=BaseInstaller.isInstalled('git');
-        if bHasGit
+        if bHasGit && ~exist(obj.dlFile,'file')
             obj.download_base_tools();
-            PxUtil.touch([obj.ve.bootDir '.mb_']);
+            PxUtil.touch(obj.dlFile);
         else
             error('Git not installed, but required');
         end
@@ -112,7 +170,6 @@ methods
             if ispc() && contains(list{i},winBadList)
                 continue
             end
-        %%%%
             bForce=obj.ve.opts.bMBTRecompile;
 
             fname=[obj.mbDir list{i} '.cpp'];
@@ -138,6 +195,7 @@ methods
         addpath(p);
     end
     function obj=get_optional_status(obj)
+        % TODO
         Sys.isInstalled('find');
         Sys.isInstalled('git');
     end
@@ -158,6 +216,7 @@ methods(Static)
             out=true;
         end
     end
+
 
 end
 end
