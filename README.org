@@ -21,10 +21,35 @@ Switching projects:
 Leave out the project name, and MVE will spit out a list of available projects to choose from.
 This follows a consistent principle with MVE -- if you don't remember a command or argument, just ommit it and mve will describe your options
 #+begin_src matlab
-> mve
-TODO
+>> mve
+
+    mve
+        MatVirtualEnv command prompt interface
+        (See VE for developer integragtion [>> help VE])
+
+      Usage:
+        mve [command] [arguments]
+
+      Main commands:
+        mve help           - see full list of commands
+        mve help [cmd]     - get help for a command
+        mve cd             - change to a project via prompt
+        mve cd [prj]       - change project to project given name
+        mve ls [arg]       - list details about a project, depndencies, env. variables, or MVE
+        mve pwd            - list current project
+        mve reload         - reload current project
+        mve config [type]  - configure projects and MVE
+        mve new [prj]      - create and switch to new project
+
 > mve config
-TODO
+
+    Valid arguments:
+      root     Configure root. These options affect all projects, but overriden by etc
+      etc      Configure project as end user. This is the highest level of configuration.
+      pkg      Configure project as developer. These are overridden by all other options.
+      hook     Configure project hook. This is a startup file for individual projects.
+      self     Configure VE
+
 #+end_src
 
 
@@ -47,17 +72,6 @@ If you don't specify a [prjDir], the first step post-installation will be to cre
 Note that installation inserts a line within your startup.m file. On MATLAB startup, MVE will run and by default you will automatically continue in the last project you were working in.
 
 ** List of commands
-List of commands:
-#+begin_src matlab
-  mve cd             % change to a project via prompt
-  mve cd [prj]       % change project to project given name
-  mve pwd            % list current project
-  mve ls [arg]       % list details about a project, depndencies, env. variables, or MVE
-  mve reload         % reload current project (including new directories, environment variables)
-  mve config [type]  % configure projects and MVE
-  mve new [prj]      % create and switch to new project
-  mve help           % see full list of commands
-  mve help [cmd]     % get help for a command
 #+end_src
 
 ** Configuration

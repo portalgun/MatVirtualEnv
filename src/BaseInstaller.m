@@ -82,7 +82,9 @@ methods
         obj.bMexSetup=true; % XXX TOOD
         out=mex.getCompilerConfigurations('Cpp','Supported');
         evalc('mex -setup C++');
-        copyfile(fullfile(matlabroot,'extern','examples','cpp_mex','arrayProduct.cpp'),'.','f');
+        fil=fullfile(matlabroot,'extern','examples','cpp_mex','arrayProduct.cpp');
+        copyfile(fil,'.','f');
+        cl=onCleanup(@() delete(fil));
 
         lastwarn('');
         try
@@ -97,6 +99,10 @@ methods
             end
             obj.bCompilable=true;
 
+        end
+        fil=Fil.find(pwd,'.*arrayProduct\.mex.*',1);
+        if ~isempty(fil)
+            delete(fil{1});
         end
         obj.warn=lastwarn;
         if ~isempty(obj.warn)
