@@ -90,7 +90,7 @@ end
 properties(Constant)
     div=char(59)
     sep=char(61)
-    MODES={'get','run_hook','rename','switch','prompt','reset','startup','startup1','all','list','compile_prj','compile_files'}
+    MODES={'get','run_hook','copy','rename','rm','switch','prompt','reset','startup','startup1','all','list','compile_prj','compile_files'}
     ROOTFLDS={'test','prvt','wrk','bin','prj','ext','tmp','var','lib','etc','data','media', 'log'}
     ROOTDIRS={'test','prvt','wrk','bin','prj','ext','tmp','var','lib','etc','data','media',['var' filesep 'log']}
     ROOTWRITE={'wrk','bin','media','tmp','var','log'}
@@ -163,6 +163,10 @@ methods(Access = ?VE)
                 obj.mode_compile_prj();
             case 'rename'
                 obj.mode_rename();
+            case 'copy'
+                obj.mode_copy();
+            case 'rm'
+                obj.mode_rm();
             otherwise
                 error(['Invalid VE Mode: ' obj.ve.mode]);
         end
@@ -185,6 +189,46 @@ methods(Access = ?VE)
         flds=fieldnames(obj.dirs.root)';
         out=[obj.ROOTFLDS obj.ve.CMDS flds];
     end
+    function mode_copy(obj)
+        obj.args=obj.ve.args;
+
+        nn=obj.args.newName;
+        on=obj.args.prj;
+
+        % CHECK NAME VALIDITY
+        if strcmp(nn,on)
+            obj.msg=sprintf('Current project is already named ''%s''.', nn);
+            return
+        elseif ismember(nn,obj.PRJS)
+            obj.msg=sprintf('New project name ''%s'' already exists.', nn);
+            return
+        elseif ismember(nn,obj.INVALIDNAMES);
+            obj.msg=sprintf('New project name ''%s'' conflicts with MVE internals.', nn);
+            return
+        end
+
+        obj.copy_prj_files(on,nn);
+        if ~isempty(obj.msg)
+            return
+        end
+    end
+    function mode_rm(obj)
+        obj.args=obj.ve.args;
+
+        on=obj.args.prj;
+        if strcmp(obj.prj,on)
+            obj.msg='Cannot remove an active project. Change to a different project fist.';
+            return
+        end
+
+        on=obj.args.prj;
+        out=Input.yn(['Are you sure you want to delete project ' on '?']);
+        if ~out
+            return
+        end
+
+        obj.rm_prj_files(on);
+    end
     function mode_rename(obj)
         obj.args=obj.ve.args;
 
@@ -203,7 +247,7 @@ methods(Access = ?VE)
             return
         end
 
-        % RNAME FILES
+        % RENAME FILES
         obj.rename_prj_files(on,nn);
         if ~isempty(obj.msg)
             return
@@ -217,8 +261,16 @@ methods(Access = ?VE)
         end
         obj.ve.exitflag{1}='rename';
     end
-
     function rename_prj_files(obj,on,nn)
+        obj.file_helper(on,nn,'m');
+    end
+    function copy_prj_files(obj,on,nn)
+        obj.file_helper(on,nn,'c');
+    end
+    function rm_prj_files(obj,on)
+        obj.file_helper(on,[],'r');
+    end
+    function file_helper(obj,on,nn,moude)
         % -rename-
         % etc/prj.(cfg|config)
         % etc/prj.d
@@ -231,11 +283,11 @@ methods(Access = ?VE)
         nw=['  ' newline];
 
         % DIRS
-        dirs={'test','wrk','bin','prj','var','log','media','data','etc'};
+        dirs={'wrk','test','bin','prj','var','log','media','data','etc'};
         n=length(dirs);
         bDirOld=false(n,1);
         bDirNew=false(n,1);;
-        bLnkOld=false(n,1);
+        bDLnOld=false(n,1);
         dirOld=cell(n,1);
         dirNew=cell(n,1);
         msg={};
@@ -252,16 +304,18 @@ methods(Access = ?VE)
             end
 
             bDirOld(i)=Dir.exist(dirOld{i});
-            bDirNew(i)=Dir.exist(dirNew{i});
-            bLnkOld(i)=bDirOld(i) && Dir.isLink(dirOld{i});
+            bDLnOld(i)=bDirOld(i) && Dir.isLink(dirOld{i});
+            if moude~='r'
+                bDirNew(i)=Dir.exist(dirNew{i});
+            end
         end
-        if any(bDirNew)
+        if any(bDLnOld) && moude ~= 'r'
+            dires=strcat({'  '},strjoin(dirOld(bDLnOld),nw));
+            msg=[msg sprintf('Directories that are unexpectedly linked:\n%s', dires{1})];
+        end
+        if any(bDirNew) && moude~='r'
             dires=strcat({'  '},strjoin(dirNew(bDirNew),nw));
             msg=[msg; sprintf('Unexpected existing files:\n%s.', dires{1})];
-        end
-        if any(bLnkOld)
-            dires=strcat({'  '},strjoin(dirOld(bLnkOld),nw));
-            msg=[msg sprintf('Directories that are unexpectedly linked:\n%s', dires{1})];
         end
 
         %FILES
@@ -274,6 +328,7 @@ methods(Access = ?VE)
         bFilOld=false(m,1);
         bFilNew=false(m,1);;
         bFilOld=false(m,1);
+        bFLnOld=false(m,1);
         filOld=cell(m,1);
         filNew=cell(m,1);
         for i = 1:m
@@ -283,21 +338,23 @@ methods(Access = ?VE)
             filNew{i}=sprintf(fil,nn);
 
             bFilOld(i)=Dir.exist(filOld{i});
-            bFilNew(i)=Dir.exist(filNew{i});
-            lnk=Dir.isLink(filOld{i});
-            bLnkOld(i)=~isempty(lnk);
+            bFLnOld(i)=bFilOld(i) && Fil.isLink(filOld{i});
+
+            if moude~='r'
+                bFilNew(i)=Dir.exist(filNew{i});
+            end
 
         end
 
-        if any(bFilNew)
+        if any(bFLnOld) && moude~='r'
+            dires=strcat({'  '},strjoin(dirOld(bFLnOld),nw));
+            msg=[msg sprintf('Files that are unexpectedly linked:\n%s', dires{1})];
+        end
+        if any(bFilNew) && moude~='r'
             dires=strcat({'  '},strjoin(dirNew(bFilNew),nw));
             msg=[msg sprintf('Unexpected existing files:\n%s.', dires{1})];
         end
-        if any(bLnkOld)
-            dires=strcat({'  '},strjoin(dirOld(bLnkOld),nw));
-            msg=[msg sprintf('Files that are unexpectedly linked:\n%s', dires{1})];
-        end
-        if ~isempty(msg)
+        if ~isempty(msg) && moude ~= 'r'
             str=sprintf('Errors in renaming %s to  %s:\n',on,nn);
             obj.msg=strjoin([str msg],newline);
             return
@@ -307,20 +364,58 @@ methods(Access = ?VE)
 
         % RENAME DIRS
         for i = 1:n
-            if ~bDirOld(i) && strcmp(dirs{i},'etc')
+            if ~bDirOld(i) && (strcmp(dirs{i},'etc') || moude=='r')
                 continue
             elseif ~bDirOld(i)
                 Dir.mk(dirNew{i});
                 continue
             end
-            Dir.mv(dirOld{i},dirNew{i});
+            if moude=='m'
+                Dir.mv(dirOld{i},dirNew{i});
+            elseif moude=='c'
+                % copyfile doesn't handle symlinks
+                if strcmp(dirs{i},'wrk')
+
+                    if isunix
+                        cmd=sprintf('cp -r %s %s',dirOld{i},dirNew{i});
+                        [exitflag,out]=unix(cmd);
+                    else
+                        TODO
+                        cmd=sprintf('cp -r %s %s',dirOld{i},dirNew{i});
+                        [exitflag,result]=system(cmd);
+                    end
+                    if exitflag
+                        disp(out)
+                    end
+
+                else
+                    Dir.cp(dirOld{i},dirNew{i});
+                end
+            elseif moude=='r'
+                if bDLnOld(i)
+                    FilDir.unlink(dirOld{i});
+                else
+                    % WILL PROMPT FOR REMOVAL
+                    Dir.rm_rf(dirOld{i});
+                end
+            end
         end
         % RENAME FILES
         for i = 1:m
             if ~bFilOld(i)
                 continue
             end
-            Dir.mv(filOld{i},filNew{i});
+            if moude=='m'
+                Dir.mv(filOld{i},filNew{i});
+            elseif moude=='c'
+                Dir.cp(filOld{i},filNew{i});
+            elseif modue=='r'
+                if bFLnOld(i)
+                    FilDir.unlink(filOld{i});
+                else
+                    delete(filOld{i});
+                end
+            end
         end
     end
     function mode_prompt(obj)

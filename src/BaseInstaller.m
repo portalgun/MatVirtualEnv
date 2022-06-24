@@ -17,7 +17,7 @@ properties
 end
 properties(Constant)
     BASEURL='https://github.com/portalgun/MatBaseTools'
-    BASEV='master'
+    BASEV='faf564647f182f9888ccb78d233013d9189d7973'
     MODES={}
 end
 %methods(Access={?PxInstaller,?Px,?VE})

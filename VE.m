@@ -179,6 +179,7 @@ methods(Static)
         % Usage:
         %   rm [prj]
         %   Remove existing project
+        %   'prj' cannot be currently active (cd'd)
 
         if nargin < 1; thing='';
             bGd=VE.cmd_helper(thing,'RM');
@@ -187,6 +188,27 @@ methods(Static)
 
         if nargin < 1; prj=[]; end
         obj=VE('rm','prj',prj);
+    end
+    function copy(varargin)
+        % Usage:
+        %   copy [prj] [newname]
+        %   copy [newname]
+        %   Clone current or existing project
+
+
+        if nargin < 1; thing='';
+            bGd=VE.cmd_helper(thing,'COPY');
+            return
+        elseif nargin==1
+            newName=varargin{1};
+            prj=VE.pwd();
+        elseif nargin==2
+            newName=varargin{2};
+            prj=varargin{1};
+        end
+
+        if nargin < 1; prj=[]; end
+        obj=VE('copy','prj',prj,'newName',newName);
     end
     function rename(varargin)
         % Usage:
@@ -459,7 +481,7 @@ end
 properties(Constant,Access=?Px)
    MODES={'rename','self','run','ls_env','get_env','ls_deps','ls_deps_rev','ls_hooks','get_options','get_root_options'}
    CRITFILES={'VE.m','src','alias'}
-   CMDS={'help','cd','pwd','reload','config','new','rm','rename','ls','dirname','ws','hook','compile','todo','notes'}
+   CMDS={'help','cd','pwd','reload','config','new','rm','rename','copy','rm','ls','dirname','ws','hook','compile','todo','notes'}
    HIST={'hist_save','hist_load','hist_rm'}
 
    CONFIG={'config_root','config_etc','config_pkg','config_hook','config_self'}
@@ -473,6 +495,7 @@ properties(Constant,Access=?Px)
    NEW={};
    RM={};
    RENAME={};
+   COPY={};
    DIRNAME={};
    HOOK={};
    COMPILE={};
