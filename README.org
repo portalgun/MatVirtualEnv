@@ -71,9 +71,6 @@ If you don't specify a [prjDir], the first step post-installation will be to cre
 
 Note that installation inserts a line within your startup.m file. On MATLAB startup, MVE will run and by default you will automatically continue in the last project you were working in.
 
-** List of commands
-#+end_src
-
 ** Configuration
 
 #+begin_src matlab
