@@ -47,8 +47,11 @@ methods(Static)
         %   List this information
         if nargin < 1; thing=''; end
         [bGd,STR]=VE.cmd_helper(thing,'CMDS');
-        if bGd
-            obj=VE(['ls_' thing]);
+        meth=['ls_' thing];
+        if bGd && ismethod('VE',meth)
+            obj=VE(meth);
+        elseif bGd
+            VE.cmd_helper([],upper(thing));
         end
         if nargout > 0
             out=STR;
@@ -73,7 +76,10 @@ methods(Static)
         % Usage:
         %   [dir] = dirname
         %   Print project directory
-        out=getenv('PX_CUR_PRJ_DIR');
+
+        %out=getenv('PX_CUR_PRJ_DIR');
+        out=builtin('getenv','PX_CUR_PRJ_NAME');
+
         if nargout > 0
             OUT=out;
         else
@@ -84,7 +90,8 @@ methods(Static)
         % Usage:
         %   [prj] = pwd
         %   Print current project
-        out=getenv('PX_CUR_PRJ_NAME');
+        out=builtin('getenv','PX_CUR_PRJ_NAME');
+        %out=getenv('PX_CUR_PRJ_NAME');
         if nargout > 0
             OUT=out;
         else
@@ -151,11 +158,13 @@ methods(Static)
         %   new [prj]
         %   Create and switch to new project
 
-        if nargin < 1
-            disp('Must specify prj name')
+
+        if nargin < 1; thing='';
+            bGd=VE.cmd_helper(thing,'NEW');
+            %disp('Must specify prj name')
             return
         end
-        dire=[getenv('PX_PRJS_ROOT') prj filesep];
+        dire=[builtin('getenv','PX_PRJS_ROOT') prj filesep];
         if Dir.exist(dire)
             Fil.touch([dire 'pkg.cfg']);
             disp(['Project ' prj ' already exists']);
@@ -169,22 +178,37 @@ methods(Static)
     function rm(prj)
         % Usage:
         %   rm [prj]
-        %   Remove current or existing project
+        %   Remove existing project
 
-        % TODO
+        if nargin < 1; thing='';
+            bGd=VE.cmd_helper(thing,'RM');
+            return
+        end
 
         if nargin < 1; prj=[]; end
         obj=VE('rm','prj',prj);
     end
-    function rename(prj,newName)
+    function rename(varargin)
         % Usage:
-        %   rename [prj]
+        %   rename [prj] [newname]
+        %   rename [newname]
         %   Rename current or existing project
 
-        % TODO
+
+        if nargin < 1; thing='';
+            bGd=VE.cmd_helper(thing,'RENAME');
+            return
+        elseif nargin==1
+            newName=varargin{1};
+            prj=VE.pwd();
+        elseif nargin==2
+            newName=varargin{2};
+            prj=varargin{1};
+        end
+
 
         if nargin < 1; prj=[]; end
-        obj=VE('rename','prj',prj,newName);
+        obj=VE('rename','prj',prj,'newName',newName);
     end
     function todo()
         % Usage;
@@ -432,14 +456,28 @@ properties(Access={?Px,?PxInstaller,?BaseInstaller,?PxBaseUnInstaller,?PxUnInsta
     bSuccess
     OUT
 end
-properties(Constant,Access=private)
-   MODES={'self','run','ls_env','get_env','ls_deps','ls_deps_rev','ls_hooks','get_options','get_root_options'}
+properties(Constant,Access=?Px)
+   MODES={'rename','self','run','ls_env','get_env','ls_deps','ls_deps_rev','ls_hooks','get_options','get_root_options'}
    CRITFILES={'VE.m','src','alias'}
    CMDS={'help','cd','pwd','reload','config','new','rm','rename','ls','dirname','ws','hook','compile','todo','notes'}
-   CONFIG={'config_root','config_etc','config_pkg','config_hook','config_self'}
-   WS={'ws_save','ws_load','ws_rm'}
-   LS={'ls_deps','ls_dep','ls_env','ls_prj','ls_prjs','ls_self','ls_hooks','ls_rev'}
    HIST={'hist_save','hist_load','hist_rm'}
+
+   CONFIG={'config_root','config_etc','config_pkg','config_hook','config_self'}
+   LS={'ls_deps','ls_dep','ls_env','ls_prj','ls_prjs','ls_self','ls_hooks','ls_rev'}
+   WS={'ws_save','ws_load','ws_rm'}
+
+
+   CD={};
+   PWD={};
+   RELOAD={};
+   NEW={};
+   RM={};
+   RENAME={};
+   DIRNAME={};
+   HOOK={};
+   COMPILE={};
+   TODO={};
+   NOTES={};
 
    MAIN={'help','cd','pwd','source','config'}
 end
@@ -452,10 +490,10 @@ methods(Access=private)
         VE.warnOff();
 
         % INTIALIZE PATH
-        if ismember(obj.mode,PxInstaller.MODES)
+        %if ismember(obj.mode,PxInstaller.MODES)
             obj.startupFile=which('startup');
             obj.userPath=userpath;
-        end
+        %end
 
         obj.get_self_path();
         obj.lastDir=builtin('cd',obj.selfPath);
@@ -473,7 +511,6 @@ methods(Access=private)
 
         obj.parse_mode();
 
-
         if ismember(obj.mode,VE.MODES)
             obj.mode_selector();
         elseif ismember(obj.mode,PxUnInstaller.MODES);
@@ -488,6 +525,13 @@ methods(Access=private)
 
         % NOTE: unless specified
         switch obj.exitflag{1}
+        case 'rename'
+            obj.bRestoreOnCl=false;
+            if obj.bTemp
+                return
+            else
+                VE.persist(obj);
+            end
         case ''
             obj.bRestoreOnCl=false;
             if obj.bTemp
@@ -557,6 +601,8 @@ methods(Access=private)
             elseif numel(obj.args) > 1
                 obj.OUT(args{:});
             end
+        case 'rename'
+            obj.Px=Px(obj);
         end
 
     end
@@ -690,7 +736,16 @@ methods(Static, Access=private)
         VE('startup1');
     end
     function [bGd,STR]=cmd_helper(thing,name)
-        C=VE.(name);
+        C=VE.(name); % CALL PROPERTY
+        if isempty(C)
+            name=['VE.' lower(name)];
+            STR=help(name);
+            bGd=~isempty(STR);
+            if nargout < 2
+                disp(STR);
+            end
+            return
+        end
         if ismember(name,{'CMDS','MAIN','WS','HIST'})
             bCmd=true;
             type='commands';
@@ -703,7 +758,7 @@ methods(Static, Access=private)
             line=2;
         end
         STR='';
-        lname=Str.Alph.lower(name);
+        lname=lower(name);
         full=[lname '_' thing];
         if isempty(thing)
             bGd=false;
@@ -744,7 +799,8 @@ methods(Static, Access=private)
             except=0;
         end
         if nargin < 1 || isempty(rootPrjDir)
-            rootPrjDir=getenv('PX_PRJ_DIR');
+            %rootPrjDir=getenv('PX_PRJ_DIR');
+            rootPrjDir=builtin('getenv','PX_PRJ_DIR');
         end
     % GET ALL PROJECTS IN PROJECT DIRECTORY
         folder=dir(rootPrjDir);

@@ -207,7 +207,7 @@ methods(Access={?VE,?InstallerTools})
         txt=['cd ' obj.ve.bootDir '; VE.startup; %MVE STARTUP'];
 
         fname=obj.ve.startupFile;
-        if ~isempty(fname) && Fil.contains(fname,'%PXSTARTUP');
+        if ~isempty(fname) && Fil.contains(fname,'%MVE STARTUP');
             return
         elseif ~isempty(fname)
             dire=fileparts(fname);

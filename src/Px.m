@@ -85,6 +85,7 @@ properties
     pathStr
 
     OUT
+    msg
 end
 properties(Constant)
     div=char(59)
@@ -126,7 +127,11 @@ methods(Access = ?VE)
         case 'switch'
             display(['Now on project ' obj.prj '.']);
         otherwise
-            display('Done.')
+            if isempty(obj.msg)
+                display('Done.')
+            else
+                display(obj.msg)
+            end
         end
     end
 %% MODES
@@ -156,6 +161,8 @@ methods(Access = ?VE)
                 obj.mode_compile_prj();
             case 'compile_file'
                 obj.mode_compile_prj();
+            case 'rename'
+                obj.mode_rename();
             otherwise
                 error(['Invalid VE Mode: ' obj.ve.mode]);
         end
@@ -174,6 +181,148 @@ methods(Access = ?VE)
             end
         end
     end
+    function out=INVALIDNAMES(obj)
+        flds=fieldnames(obj.dirs.root)';
+        out=[obj.ROOTFLDS obj.ve.CMDS flds];
+    end
+    function mode_rename(obj)
+        obj.args=obj.ve.args;
+
+        nn=obj.args.newName;
+        on=obj.args.prj;
+
+        % CHECK NAME VALIDITY
+        if strcmp(nn,on)
+            obj.msg=sprintf('Current project is already named ''%s''.', nn);
+            return
+        elseif ismember(nn,obj.PRJS)
+            obj.msg=sprintf('New project name ''%s'' already exists.', nn);
+            return
+        elseif ismember(nn,obj.INVALIDNAMES);
+            obj.msg=sprintf('New project name ''%s'' conflicts with MVE internals.', nn);
+            return
+        end
+
+        % RNAME FILES
+        obj.rename_prj_files(on,nn);
+        if ~isempty(obj.msg)
+            return
+        end
+
+        % CHANGE TO PROJECT IF CURRENT
+        obj.get_prjs();
+        obj.rootOpts{'bWorkspace'}=false;
+        if strcmp(obj.prj,on)
+            obj.mode_switch(nn);
+        end
+        obj.ve.exitflag{1}='rename';
+    end
+
+    function rename_prj_files(obj,on,nn)
+        % -rename-
+        % etc/prj.(cfg|config)
+        % etc/prj.d
+        % hook
+
+        % -wrk-
+        % rm
+        % create new
+        % lib?
+        nw=['  ' newline];
+
+        % DIRS
+        dirs={'test','wrk','bin','prj','var','log','media','data','etc'};
+        n=length(dirs);
+        bDirOld=false(n,1);
+        bDirNew=false(n,1);;
+        bLnkOld=false(n,1);
+        dirOld=cell(n,1);
+        dirNew=cell(n,1);
+        msg={};
+        for i = 1:length(dirs)
+            dire=dirs{i};
+            root=obj.dirs.root.(dire);
+
+
+            dirOld{i}=[root on];
+            dirNew{i}=[root nn];
+            if strcmp(dire,'etc')
+                dirOld{i}=[dirOld{i} '.d'];
+                dirNew{i}=[dirNew{i} '.d'];
+            end
+
+            bDirOld(i)=Dir.exist(dirOld{i});
+            bDirNew(i)=Dir.exist(dirNew{i});
+            bLnkOld(i)=bDirOld(i) && Dir.isLink(dirOld{i});
+        end
+        if any(bDirNew)
+            dires=strcat({'  '},strjoin(dirNew(bDirNew),nw));
+            msg=[msg; sprintf('Unexpected existing files:\n%s.', dires{1})];
+        end
+        if any(bLnkOld)
+            dires=strcat({'  '},strjoin(dirOld(bLnkOld),nw));
+            msg=[msg sprintf('Directories that are unexpectedly linked:\n%s', dires{1})];
+        end
+
+        %FILES
+        etc=obj.dirs.root.etc;
+        %hk=obj.dirs.root.hook;
+        %files={[etc '%s.config'],[etc '%s.cfg'],[hk '%s.m']};
+        files={[etc '%s.config'],[etc '%s.cfg']};
+        m=length(files);
+
+        bFilOld=false(m,1);
+        bFilNew=false(m,1);;
+        bFilOld=false(m,1);
+        filOld=cell(m,1);
+        filNew=cell(m,1);
+        for i = 1:m
+            fil=files{i};
+
+            filOld{i}=sprintf(fil,on);
+            filNew{i}=sprintf(fil,nn);
+
+            bFilOld(i)=Dir.exist(filOld{i});
+            bFilNew(i)=Dir.exist(filNew{i});
+            lnk=Dir.isLink(filOld{i});
+            bLnkOld(i)=~isempty(lnk);
+
+        end
+
+        if any(bFilNew)
+            dires=strcat({'  '},strjoin(dirNew(bFilNew),nw));
+            msg=[msg sprintf('Unexpected existing files:\n%s.', dires{1})];
+        end
+        if any(bLnkOld)
+            dires=strcat({'  '},strjoin(dirOld(bLnkOld),nw));
+            msg=[msg sprintf('Files that are unexpectedly linked:\n%s', dires{1})];
+        end
+        if ~isempty(msg)
+            str=sprintf('Errors in renaming %s to  %s:\n',on,nn);
+            obj.msg=strjoin([str msg],newline);
+            return
+        end
+
+        % HISTORY FILES
+
+        % RENAME DIRS
+        for i = 1:n
+            if ~bDirOld(i) && strcmp(dirs{i},'etc')
+                continue
+            elseif ~bDirOld(i)
+                Dir.mk(dirNew{i});
+                continue
+            end
+            Dir.mv(dirOld{i},dirNew{i});
+        end
+        % RENAME FILES
+        for i = 1:m
+            if ~bFilOld(i)
+                continue
+            end
+            Dir.mv(filOld{i},filNew{i});
+        end
+    end
     function mode_prompt(obj)
         obj.prompt_prj();
         if strcmp(obj.ve.exitflag{1},'exit')
@@ -183,9 +332,11 @@ methods(Access = ?VE)
     end
     function mode_get(obj)
         obj.bTemp=true;
-        curPrj=obj.prj;
-        obj.prj=obj.argOpts{'prj'};
-        if ~ismember(obj.prj,obj.PRJS);
+        prj=obj.argOpts{'prj'};
+        if isempty(prj)
+            prj=obj.prj;
+        end
+        if ~ismember_cell(obj.prj,obj.PRJS)
             error(['Invalid project: ' prj ]);
         end
 
@@ -194,9 +345,13 @@ methods(Access = ?VE)
         end
         obj.setup_prj();
     end
-    function mode_switch(obj)
+    function mode_switch(obj,prj)
         curPrj=obj.prj;
-        obj.prj=obj.argOpts{'prj'};
+        if nargin < 2 || isempty(prj)
+            obj.prj=obj.argOpts{'prj'};
+        else
+            obj.prj=prj;
+        end
         if isempty(obj.prj)
             obj.prompt_prj();
         elseif ~ismember(obj.prj,obj.PRJS);
@@ -361,9 +516,7 @@ methods(Access = ?VE)
         end
         if isempty(obj.rootCfgFile)
             dire=[Dir.parent(obj.ve.selfPath) 'etc' filesep];
-            if ~Dir.exist(dire);
-                mkdir(dire);
-            end
+            mkdir(dire);
             obj.rootCfgFile=[dire name];
             Fil.touch(obj.rootCfgFile);
         end
@@ -444,8 +597,14 @@ methods(Access = ?VE)
         end
         obj.run_post_hooks();
         builtin('cd',obj.dirs.prj.wrk);
-        savepath;
+        savepath;  %% XXX NEED to chekck if can save to pathdef
         savepath(obj.pathFile);
+        if isempty(obj.mat.userpath) && ~isempty(obj.sys.home)
+            def=[obj.sys.home 'Documents' filesep 'MATLAB'];
+            if Dir.exist(def)
+                userpath(def);
+            end
+        end
     end
     function get_all_opts(obj,prj)
         if nargin > 1
@@ -573,24 +732,33 @@ methods(Access = ?VE)
         end
 
     end
-    function obj=make_prj_dirs(obj)
+    function obj=make_prj_dirs(obj,prj)
+        if nargin < 2 || isempty(prj)
+            prj=obj.prj;
+        end
         flds={'prj','wrk','bin','data','media','var','log','test'};
+        % PRJ DIRS
         for i = 1:length(flds)
             fld=flds{i};
-            obj.dirs.prj.(fld)=[obj.dirs.root.(fld) obj.prj filesep];
+            obj.dirs.prj.(fld)=[obj.dirs.root.(fld) prj filesep];
             if ~obj.bTemp && ~Dir.exist(obj.dirs.prj.(fld))
                 mkdir(obj.dirs.prj.(fld));
             end
         end
         obj.dirs.root.varlib=[obj.dirs.prj.var 'lib' filesep];
-        if ~obj.bTemp && ~Dir.exist(obj.dirs.root.varlib)
+        if ~obj.bTemp && ~Dir.exist([obj.dirs.prj.var 'lib' filesep])
             mkdir(obj.dirs.root.varlib);
         end
     end
-    function obj=make_wrk_dir(obj)
+    function obj=make_wrk_dir(obj,prj)
+        if nargin < 2 || isempty(prj)
+            prj=obj.prj;
+        end
+
+        % WRK
         obj.dirs.wrk={};
         flds={'bin','lib','src','media','bin','data','var','test'};
-        obj.dirs.lnk.wrk=[obj.dirs.root.wrk obj.prj filesep];
+        obj.dirs.lnk.wrk=[obj.dirs.root.wrk prj filesep];
         for i =1:length(flds)
             fld=flds{i};
             obj.dirs.lnk.(fld)= [obj.dirs.lnk.wrk fld filesep];
@@ -821,6 +989,10 @@ methods(Access = ?VE)
         for i = 1:numel(flds)
             fld=flds{i};
 
+            if ~ischar(obj.Opts.Env.(fld))
+                % XXX
+                continue
+            end
             if contains(obj.Opts.Env.(fld),'$$')
                 mtchs=regexp(obj.Opts.Env.(fld),'\$\$[A-Z_]*','match');
                 for j = 1:length(mtchs)
@@ -918,7 +1090,7 @@ methods(Static, Access=?PxPrjOptions)
         P={ ...
            'prj',[],'ischar_e';
            'bForce',false,'Num.isBinary';
-           'compileFnames','','ischarcell'
+           'compileFnames','','ischarcell';
         };
 
     end

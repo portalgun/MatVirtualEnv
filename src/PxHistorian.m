@@ -88,7 +88,9 @@ methods
             end
 
             bSym=FilDir.isLink(lnFile);
-            if bSym && strcmp(FilDir.readLink(lnFile),realFile);
+            if isempty(bSym)
+                ;
+            elseif bSym && strcmp(FilDir.readLink(lnFile),realFile);
                 continue
             elseif bSym
                 delete(lnFile);
